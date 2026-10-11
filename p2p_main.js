@@ -130,10 +130,6 @@ async function initP2PGame() {
 
     setupEventListeners();
     populateP2PDeckSelect();
-    
-    // 5秒ごとに部屋の状態をチェック更新
-    checkRoomStatuses();
-    setInterval(checkRoomStatuses, 5000);
 }
 
 function resetP2PGameVariables() {
@@ -155,82 +151,16 @@ function resetP2PGameVariables() {
     gameState.turnHistory = [];
 }
 
-// ① 部屋状態の動的チェック
-async function checkRoomStatuses() {
-    for (let i = 1; i <= 5; i++) {
-        const statusEl = document.getElementById(`p2p-room-status-${i}`);
-        const btnEl = document.getElementById(`btn-join-room-${i}`);
-        if (!statusEl || !btnEl) continue;
-
-        const roomId = `yamato-room-${i}`;
-        try {
-            const tempPeer = new Peer(null, { host: '0.peerjs.com', port: 443, path: '/', secure: true });
-            let checked = false;
-
-            const timer = setTimeout(() => {
-                if (!checked) {
-                    checked = true;
-                    try { tempPeer.destroy(); } catch(e){}
-                    statusEl.innerText = "⚪ 空き (0/2)";
-                    statusEl.className = "text-xs text-slate-400 font-mono";
-                    btnEl.disabled = false;
-                }
-            }, 1500);
-
-            tempPeer.on('open', () => {
-                const conn = tempPeer.connect(roomId, { reliable: true });
-                conn.on('open', () => {
-                    conn.send({ type: 'CHECK_ROOM_STATUS' });
-                    conn.on('data', (resp) => {
-                        if (!checked) {
-                            checked = true;
-                            clearTimeout(timer);
-                            if (resp && resp.payload && resp.payload.status === 'FULL') {
-                                statusEl.innerText = "🔴 対戦中 (2/2)";
-                                statusEl.className = "text-xs text-rose-400 font-bold font-mono";
-                                btnEl.disabled = true;
-                            } else {
-                                statusEl.innerText = "🟢 待機中 (1/2)";
-                                statusEl.className = "text-xs text-emerald-400 font-bold font-mono";
-                                btnEl.disabled = false;
-                            }
-                            try { tempPeer.destroy(); } catch(e){}
-                        }
-                    });
-                });
-                tempPeer.on('error', () => {
-                    if (!checked) {
-                        checked = true;
-                        clearTimeout(timer);
-                        statusEl.innerText = "⚪ 空き (0/2)";
-                        statusEl.className = "text-xs text-slate-400 font-mono";
-                        btnEl.disabled = false;
-                        try { tempPeer.destroy(); } catch(e){}
-                    }
-                });
-            });
-        } catch(e) {
-            statusEl.innerText = "⚪ 空き (0/2)";
-            btnEl.disabled = false;
-        }
-    }
-}
-
-// ① 部屋選択処理
+// ① 部屋選択＆接続処理（Peerエラー完全防止版）
 window.selectP2PRoom = async function(roomNumber) {
     gameState.currentRoomId = `yamato-room-${roomNumber}`;
-    document.getElementById('p2p-room-select-screen')?.classList.add('hidden');
 
+    // ルーム選択画面を非表示にする
+    const roomScreen = document.getElementById('p2p-room-select-screen');
+    if (roomScreen) roomScreen.classList.add('hidden');
+
+    // ネットワークモジュールの初期化
     gameState.p2pNetwork = new gameModules.P2PNetwork();
-
-    // 部屋ステータス確認要求への自動応答リスナーを追加
-    gameState.p2pNetwork.onDataReceivedCallback = (data) => {
-        if (data && data.type === 'CHECK_ROOM_STATUS') {
-            gameState.p2pNetwork.send('ROOM_STATUS_RESP', { status: gameState.opponentReady ? 'FULL' : 'WAITING' });
-            return;
-        }
-        if (gameState.p2pManager) gameState.p2pManager.handleIncomingPacket(data);
-    };
 
     gameState.p2pManager = new gameModules.P2PManager(gameState.p2pNetwork, {
         getSelectedCards: () => gameState.selectedCardIds,
@@ -251,17 +181,14 @@ window.selectP2PRoom = async function(roomNumber) {
                 checkExecuteTurn();
             }
         },
-        // 相手がデッキ決定（②・③）
         onOpponentDeckReady: (opponentDeck) => {
             gameState.opponentDeckData = opponentDeck;
             checkStartBattleSequence();
         },
-        // 相手がターン3枚選択（④）
         onOpponentTurnChoice: (choice) => {
             gameState.opponentTurnChoice = choice;
             checkExecuteTurn();
         },
-        // 相手が同じデッキで再戦希望（⑥）
         onOpponentRematchSame: () => {
             gameState.opponentRematchRequest = true;
             if (gameState.myRematchRequest) {
@@ -271,23 +198,41 @@ window.selectP2PRoom = async function(roomNumber) {
                 if (waitText) waitText.innerText = "相手は再戦を希望しています...";
             }
         },
-        // 相手がデッキ選択へ戻る（⑥）
         onOpponentChangeDeck: () => {
             alert("相手がデッキ選択へ戻りました。");
             resetToDeckSelectModal();
         }
     });
 
+    // デッキ選択モーダル表示関数
+    const openDeckModal = () => {
+        const deckModal = document.getElementById('p2p-deck-select-modal');
+        if (deckModal) deckModal.classList.remove('hidden');
+    };
+
+    // 相手と接続が成立した時の処理（ゲスト側）
     gameState.p2pNetwork.onConnectedCallback = () => {
-        // ② デッキ選択モーダルを表示
-        document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
+        console.log("[P2P] 相手との接続が確立しました。");
+        openDeckModal();
+    };
+
+    // エラー発生時の安全ハンドリング
+    gameState.p2pNetwork.onErrorCallback = (err) => {
+        console.warn("[P2P] 部屋への接続試行中（ホストとして待機を開始します）:", err);
     };
 
     try {
+        // まずホストとして部屋を作成してみる
         await gameState.p2pNetwork.init(gameState.currentRoomId);
+        console.log(`[P2P] 部屋 ${roomNumber} のホストとして待機を開始しました。`);
+        // ホストとして作成できたら直ちにデッキ選択を表示
+        openDeckModal();
     } catch(e) {
+        // 部屋が既に存在する場合はゲストとして参加接続
+        console.log(`[P2P] 部屋 ${roomNumber} にゲストとして接続を試みます...`);
         await gameState.p2pNetwork.init();
         gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+        openDeckModal();
     }
 };
 
