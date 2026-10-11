@@ -830,7 +830,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
                 <button 
                     onclick="window.switchResultTurnTab(${i})" 
                     ${!hasData ? 'disabled' : ''} 
-                    class="w-full py-2 px-1 rounded-xl border text-[10px] sm:text-xs font-yuji transition-all text-center ${btnStyle}">
+                    class="w-full min-h-[32px] py-1.5 px-1 rounded-xl border text-[10px] sm:text-xs font-yuji transition-all text-center flex-shrink-0 flex items-center justify-center ${btnStyle}">
                     ${turnLabels[i]}
                 </button>
             `;
@@ -991,6 +991,9 @@ function refreshAllUI() {
                 ? (gameState.cpuJoker.imageReal || gameState.cpuJoker.image_real)
                 : (gameState.cpuJoker.imageIllust || gameState.cpuJoker.image_illust);
             
+            // ★ この1行を追加（画像表示時の縦横比・サイズ崩れを固定）
+            cpuImgEl.className = "w-full h-full object-cover object-top aspect-[3/4]";
+
             if (imageName) {
                 cpuImgEl.src = `images/${imageName}`;
             } else {
@@ -1235,8 +1238,8 @@ function updateCalculatorUI() {
             `);
         }
 
-        const overflowClass = activeEntries.length > 8 ? "overflow-y-auto" : "overflow-hidden";
-        tagsEl.className = `grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] ${overflowClass} content-start`;
+        // ★ UI崩れガード: スクロール制御と高さを完全固定
+        tagsEl.className = "grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] overflow-y-auto content-start";
         tagsEl.innerHTML = slotsHTML.join('');
     }
 
