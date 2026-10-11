@@ -34,7 +34,7 @@
 
 <body class="h-screen w-screen flex flex-col justify-between overflow-hidden text-slate-100 select-none">
 
-    <!-- ================= ==========================================
+    <!-- ==========================================================
          ① ルーム選択 ＆ 接続状態 画面 (初期表示)
          ========================================================== -->
     <div id="p2p-room-select-screen" class="fixed inset-0 z-[80000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
@@ -50,7 +50,7 @@
                             <div class="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
                                 <div class="text-left">
                                     <span class="font-bold text-sm text-slate-200">対戦部屋 ${i}</span>
-                                    <div id="p2p-room-status-${i}" class="text-xs text-slate-500 font-mono">確認中...</div>
+                                    <div id="p2p-room-status-${i}" class="text-xs text-slate-500 font-mono">⚪ 空き (0/2)</div>
                                 </div>
                                 <button id="btn-join-room-${i}" onclick="window.selectP2PRoom(${i})" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs px-4 py-2 rounded-lg transition-all cursor-pointer">
                                     入る
@@ -67,8 +67,8 @@
         </div>
     </div>
 
-    <!-- ================= ==========================================
-         ② デッキ選択 Modal（部屋接続成功後に自動表示）
+    <!-- ==========================================================
+         ② デッキ選択 Modal（部屋選択直後に表示）
          ========================================================== -->
     <div id="p2p-deck-select-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[85000] hidden select-none">
         <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 max-w-md w-11/12 text-center shadow-2xl space-y-4">
@@ -88,7 +88,7 @@
         </div>
     </div>
 
-    <!-- ================= ==========================================
+    <!-- ==========================================================
          相手待機中 オーバーレイ
          ========================================================== -->
     <div id="p2p-waiting-opponent-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center z-[86000] hidden select-none">
@@ -99,7 +99,7 @@
         </div>
     </div>
 
-    <!-- ================= ==========================================
+    <!-- ==========================================================
          バトル本体 UI 描画コンテナ (`p2p_main.js` から完全制御)
          ========================================================== -->
     <header class="w-full bg-slate-950/80 border-b border-slate-800">
@@ -221,7 +221,7 @@
         </section>
     </main>
 
-    <!-- モーダル各種 (出撃確認 / リザルト / 勝敗カットイン) -->
+    <!-- 出撃確認モーダル -->
     <div id="battle-confirm-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[80] hidden select-none">
         <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-5 sm:p-7 max-w-2xl w-11/12 text-center shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <h3 class="text-xl sm:text-2xl font-black text-amber-400 font-yuji border-b border-amber-500/30 pb-2.5 flex items-center justify-center gap-2">
@@ -262,7 +262,7 @@
         </div>
     </div>
 
-    <!-- 勝敗1枚絵カットイン（⑤・⑥の「再戦」「デッキ選び直し」ボタンを完備） -->
+    <!-- 勝敗1枚絵カットイン（⑤・⑥の「再戦」「デッキ選び直し」ボタン完備） -->
     <div id="game-result-cutin-modal" class="fixed inset-0 z-[10000] bg-slate-950 flex items-center justify-center hidden opacity-0 transition-opacity duration-500 select-none overflow-hidden">
         <img id="result-cutin-img" src="" class="absolute inset-0 w-full h-full object-cover z-0">
         <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none z-10"></div>
@@ -282,7 +282,7 @@
         </div>
     </div>
 
-    <!-- P2P通信スクリプトの直接動的発火 -->
+    <!-- P2P通信スクリプトの単一ロード -->
     <script type="module" src="p2p_main.js"></script>
 
 </body>
