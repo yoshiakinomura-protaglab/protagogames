@@ -1,6 +1,6 @@
 /**
- * p2p_main.js - オンラインP2P対戦専用メインモジュール
- * 役割: P2P通信同期、20枚デッキハンドシェイク、毎ターンの同時カード選択、30秒タイマー、演出（battle-animation.js）の呼び出し
+ * p2p_main.js - オンラインP2P対戦専用メインモジュール (フリーバトル完全同期版)
+ * 役割: P2P通信同期、20枚デッキハンドシェイク、毎ターンの同時カード選択、30秒タイマー、本格計算エンジン＆演出完全連動
  */
 
 // ポータブル環境用：MIMEタイプ制限を回避して依存関係付きモジュールを安全に動的ロードする関数
@@ -47,7 +47,6 @@ async function loadGameModules() {
 
 let gameModules = null;
 const INITIAL_HP = 10000;
-
 let bgmAudio = null;
 
 const gameState = {
@@ -115,7 +114,6 @@ async function initP2PGame() {
         }
     }
 
-    // デフォルトフォールバック
     if (!gameState.playerDeckIds || gameState.playerDeckIds.length !== 20) {
         gameState.playerDeckIds = gameState.allCards.slice(0, 20).map(c => String(c.id));
     }
@@ -124,7 +122,7 @@ async function initP2PGame() {
     playSceneBGM('d01', true);
     setupEventListeners();
 
-    // 2. P2P通信マネージャーの初期化 ＆ 自動ハンドシェイク
+    // 2. P2P通信マネージャーの初期化 ＆ ハンドシェイク
     initP2PNetworkConnection();
 
     refreshAllUI();
@@ -196,7 +194,7 @@ function initP2PNetworkConnection() {
         onP2PBattleStart: () => {
             refreshAllUI();
             triggerTurnCutin(1, () => {
-                gameState.p2pManager.startTurnTimer();
+                if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
             });
         },
         // 双方の選択3枚が揃った時の同期実行
@@ -209,7 +207,8 @@ function initP2PNetworkConnection() {
                 .map(id => gameState.cpuHand.find(c => String(c.id || c.cardId) === String(id)))
                 .filter(Boolean);
 
-            const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
+            // 本格戦闘判定エンジン（特性タグ・ジャンケン・ポーカー役フル対応）
+            const battleResult = calculateBattleResultFull(playerCards, cpuCards, gameState.tagMaster);
             gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
 
             gameState.turnHistory[gameState.turn - 1] = {
@@ -225,7 +224,6 @@ function initP2PNetworkConnection() {
 
     // P2P通信初期化＆自身の20枚デッキを送信
     gameState.p2pNetwork.init().then(() => {
-        // 自軍のデッキ構成データを相手に送信
         const jId = gameState.playerDeckIds[0];
         const cIds = gameState.playerDeckIds.slice(1);
         gameState.p2pManager.sendMyDeck({ jokerId: jId, cardIds: cIds });
@@ -375,332 +373,4 @@ function updateBattleStartButtonUI() {
 
     if (selectedCount === 3) {
         battleStartBtn.disabled = false;
-        battleStartBtn.innerText = "⚔️ 戦闘決定！";
-        battleStartBtn.className = "w-full py-2.5 sm:py-3 px-5 rounded-xl text-sm sm:text-base font-black bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 shadow-lg shadow-amber-950/80 border border-amber-300 cursor-pointer";
-    } else {
-        battleStartBtn.disabled = true;
-        battleStartBtn.innerText = `カード選択中 (${selectedCount}/3)`;
-        battleStartBtn.className = "w-full py-2.5 sm:py-3 px-5 rounded-xl text-sm sm:text-base font-black bg-slate-900/90 text-slate-400 border border-slate-800 opacity-70 cursor-not-allowed";
-    }
-}
-
-function showBattleConfirmModal() {
-    const modal = document.getElementById('battle-confirm-modal');
-    if (!modal) return;
-
-    const selectedCards = gameState.selectedCardIds
-        .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
-        .filter(Boolean);
-
-    if (selectedCards.length !== 3) return;
-
-    const cardsContainer = document.getElementById('modal-confirm-card-list');
-    if (cardsContainer) {
-        cardsContainer.innerHTML = selectedCards.map(c => {
-            const imgName = (gameState.displayMode === 'real' ? c.imageReal : c.imageIllust) || `${c.id}_illust.jpg`;
-            return `
-                <div class="flex flex-col items-center">
-                    <div class="w-full aspect-[3/4] bg-slate-900 rounded-lg overflow-hidden border border-amber-400/80 mb-1.5 shadow-md">
-                        <img src="images/${imgName}" class="w-full h-full object-cover object-top" onerror="this.src='images/default.jpg';">
-                    </div>
-                    <div class="text-sm sm:text-base font-nomal text-white-300 truncate w-full text-center leading-tight font-yuji">${c.name}</div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    const pokerInfo = getPokerHandInfo(selectedCards);
-    const pokerEl = document.getElementById('modal-confirm-poker');
-    if (pokerEl) pokerEl.innerText = pokerInfo.name;
-
-    const basePowerSum = selectedCards.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
-    const pokerMult = pokerInfo.multiplier;
-
-    const totalAtk = Math.round(basePowerSum * pokerMult);
-    const totalDef = Math.round(basePowerSum * pokerMult);
-
-    const atkEl = document.getElementById('modal-confirm-atk');
-    const defEl = document.getElementById('modal-confirm-def');
-    if (atkEl) atkEl.innerText = totalAtk.toLocaleString();
-    if (defEl) defEl.innerText = totalDef.toLocaleString();
-
-    modal.style.display = 'flex';
-    modal.classList.remove('hidden');
-}
-
-function hideBattleConfirmModal() {
-    const modal = document.getElementById('battle-confirm-modal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.classList.add('hidden');
-    }
-}
-
-async function runBattleAnimation(playerCards, cpuCards, battleResult) {
-    const calcAtkText = document.getElementById('calc-total-atk')?.innerText.replace(/,/g, '') || '0';
-    const calcDefText = document.getElementById('calc-total-def')?.innerText.replace(/,/g, '') || '0';
-    const calcAtkVal = parseInt(calcAtkText, 10);
-    const calcDefVal = parseInt(calcDefText, 10);
-
-    const whiteout = document.getElementById('battle-animation-overlay');
-
-    if (whiteout) {
-        whiteout.classList.remove('opacity-0', 'pointer-events-none');
-        whiteout.classList.add('opacity-100', 'pointer-events-auto');
-    }
-
-    await sleep(300);
-    gameState.selectedCardIds = [];
-    refreshAllUI();
-    await sleep(200);
-
-    if (whiteout) {
-        whiteout.classList.remove('opacity-100', 'pointer-events-auto');
-        whiteout.classList.add('opacity-0', 'pointer-events-none');
-    }
-
-    const formattedCpuCards = cpuCards.map(c => {
-        const img = (gameState.displayMode === 'real' ? c.imageReal : c.imageIllust) || `${c.id}_illust.jpg`;
-        return {
-            name: c.name || '敵英傑',
-            image: `images/${img}`
-        };
-    });
-
-    const isGameOver = (
-        gameState.playerHp - battleResult.cpu.damageGiven <= 0 ||
-        gameState.cpuHp - battleResult.player.damageGiven <= 0 ||
-        gameState.turn >= gameState.maxTurn
-    );
-
-    const animData = {
-        cpuCards: formattedCpuCards,
-        enemyBaseAtk: battleResult.cpu.basePowerSum,
-        enemyBaseDef: battleResult.cpu.basePowerSum,
-        tags: [],
-        poker: { name: battleResult.cpu.pokerInfo.name, multiplier: battleResult.cpu.pokerMult },
-        janken: {
-            title: `⚔️ じゃんけん結果：${battleResult.jankenResultText}`,
-            sub: `自軍補正 ×${battleResult.player.jankenMult} / 敵軍補正 ×${battleResult.cpu.jankenMult}`,
-            atkMult: battleResult.cpu.jankenMult,
-            defMult: battleResult.cpu.jankenMult
-        },
-        playerBaseAtk: calcAtkVal,
-        playerBaseDef: calcDefVal,
-        playerAfterJankenAtk: Math.round(calcAtkVal * (battleResult.player.jankenMult || 1.0)),
-        playerAfterJankenDef: Math.round(calcDefVal * (battleResult.player.jankenMult || 1.0)),
-        playerAtk: battleResult.player.finalAtk,
-        playerDef: battleResult.player.finalDef,
-        enemyFinalAtk: battleResult.cpu.finalAtk,
-        enemyFinalDef: battleResult.cpu.finalDef,
-        isGameOver: isGameOver
-    };
-
-    if (window.battleAnim) {
-        await window.battleAnim.play(animData);
-    }
-
-    const turnResultModal = document.getElementById('turn-result-modal');
-    if (turnResultModal) turnResultModal.classList.add('hidden');
-
-    if (isGameOver) {
-        gameState.playerHp = Math.max(0, gameState.playerHp - battleResult.cpu.damageGiven);
-        gameState.cpuHp = Math.max(0, gameState.cpuHp - battleResult.player.damageGiven);
-
-        let resultType = 'win_normal';
-        if (gameState.cpuHp <= 0) resultType = 'win_perfect';
-        else if (gameState.playerHp <= 0) resultType = 'lose_perfect';
-        else if (gameState.playerHp > gameState.cpuHp) resultType = 'win_normal';
-        else resultType = 'lose_normal';
-
-        showGameResultCutin(resultType);
-    } else {
-        showTurnResultModal(playerCards, cpuCards, battleResult);
-    }
-}
-
-function showTurnResultModal(playerCards, cpuCards, battleResult) {
-    const modal = document.getElementById('turn-result-modal');
-    if (!modal) return;
-    modal.classList.remove('hidden');
-}
-
-function proceedToNextTurn() {
-    const modal = document.getElementById('turn-result-modal');
-    if (modal) modal.classList.add('hidden');
-
-    if (!gameState.lastBattleResult) return;
-    const { battleResult, playerCards, cpuCards } = gameState.lastBattleResult;
-
-    gameState.playerHp = Math.max(0, gameState.playerHp - battleResult.cpu.damageGiven);
-    gameState.cpuHp = Math.max(0, gameState.cpuHp - battleResult.player.damageGiven);
-
-    const pUsedSet = new Set(playerCards.map(c => String(c.id || c.cardId)));
-    gameState.hand = gameState.hand.filter(c => !pUsedSet.has(String(c.id || c.cardId)));
-
-    const cUsedSet = new Set(cpuCards.map(c => String(c.id || c.cardId)));
-    gameState.cpuHand = gameState.cpuHand.filter(c => !cUsedSet.has(String(c.id || c.cardId)));
-
-    while (gameState.hand.length < 5 && gameState.deck.length > 0) gameState.hand.push(gameState.deck.shift());
-    while (gameState.cpuHand.length < 5 && gameState.cpuDeck.length > 0) gameState.cpuHand.push(gameState.cpuDeck.shift());
-
-    gameState.turn += 1;
-    refreshAllUI();
-
-    triggerTurnCutin(gameState.turn, () => {
-        if (gameState.p2pManager) {
-            gameState.p2pManager.startTurnTimer();
-        }
-    });
-}
-
-function showGameResultCutin(resultType) {
-    const modal = document.getElementById('game-result-cutin-modal');
-    const cutinImg = document.getElementById('result-cutin-img');
-    const titleBtn = document.getElementById('btn-cutin-title');
-
-    if (!modal || !cutinImg) return;
-
-    cutinImg.src = `images/himiko_${resultType}.jpg`;
-    cutinImg.onerror = () => { cutinImg.src = 'images/default.jpg'; };
-
-    modal.classList.remove('hidden');
-    requestAnimationFrame(() => modal.classList.add('active'));
-
-    if (titleBtn) {
-        titleBtn.onclick = () => {
-            stopEraBGM();
-            sessionStorage.removeItem('isP2PMatch');
-            window.location.href = 'title.html';
-        };
-    }
-}
-
-function refreshAllUI() {
-    const turnEl = document.getElementById('current-turn-num');
-    if (turnEl) turnEl.innerText = `${Math.min(gameState.turn, gameState.maxTurn)}/${gameState.maxTurn}`;
-
-    updateBattleStartButtonUI();
-
-    const playerHpEl = document.getElementById('player-hp-text');
-    if (playerHpEl) playerHpEl.innerText = `${gameState.playerHp.toLocaleString()} / ${INITIAL_HP.toLocaleString()}`;
-
-    const playerHpBar = document.getElementById('player-hp-bar');
-    if (playerHpBar) {
-        const playerPct = Math.max(0, Math.min(100, (gameState.playerHp / INITIAL_HP) * 100));
-        playerHpBar.style.width = `${playerPct}%`;
-    }
-
-    const cpuHpEl = document.getElementById('cpu-hp-text');
-    if (cpuHpEl) cpuHpEl.innerText = `${gameState.cpuHp.toLocaleString()} / ${INITIAL_HP.toLocaleString()}`;
-
-    const cpuHpBar = document.getElementById('cpu-hp-bar');
-    if (cpuHpBar) {
-        const cpuPct = Math.max(0, Math.min(100, (gameState.cpuHp / INITIAL_HP) * 100));
-        cpuHpBar.style.width = `${cpuPct}%`;
-    }
-
-    if (gameState.cpuJoker) {
-        const cpuNameEl = document.getElementById('cpu-joker-name');
-        if (cpuNameEl) cpuNameEl.innerText = gameState.cpuJoker.name || '対戦相手';
-
-        const cpuImgEl = document.getElementById('cpu-joker-img');
-        if (cpuImgEl) {
-            const imageName = gameState.displayMode === 'real'
-                ? (gameState.cpuJoker.imageReal || gameState.cpuJoker.image_real)
-                : (gameState.cpuJoker.imageIllust || gameState.cpuJoker.image_illust);
-            cpuImgEl.src = imageName ? `images/${imageName}` : 'images/default.jpg';
-        }
-    }
-
-    const handContainer = document.getElementById('player-hand-container');
-    if (handContainer && gameModules && gameModules.renderBattleUI) {
-        gameModules.renderBattleUI(handContainer, gameState, { 
-            selectedCardIds: gameState.selectedCardIds,
-            displayMode: gameState.displayMode
-        });
-    }
-
-    updateCalculatorUI();
-}
-
-function getPokerHandInfo(cards) {
-    if (!cards || cards.length !== 3) return { name: '役なし', multiplier: 1.0 };
-    const ranks = cards.map(c => String(c.rank || '1').toUpperCase());
-    const jokerCount = ranks.filter(r => r === 'JOKER' || r === 'JK').length;
-    if (jokerCount >= 2) return { name: 'スリーカード ✨2.0倍', multiplier: 2.0 };
-    if (ranks[0] === ranks[1] && ranks[1] === ranks[2]) return { name: 'スリーカード ✨2.0倍', multiplier: 2.0 };
-    return { name: '役なし', multiplier: 1.0 };
-}
-
-function updateCalculatorUI() {
-    const atkEl = document.getElementById('calc-total-atk');
-    const defEl = document.getElementById('calc-total-def');
-
-    const selectedCards = gameState.selectedCardIds
-        .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
-        .filter(Boolean);
-    const count = selectedCards.length;
-
-    const basePowerSum = selectedCards.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
-    const pokerInfo = getPokerHandInfo(selectedCards);
-
-    const totalAtk = count > 0 ? Math.round(basePowerSum * pokerInfo.multiplier) : 0;
-    const totalDef = count > 0 ? Math.round(basePowerSum * pokerInfo.multiplier) : 0;
-
-    if (atkEl) atkEl.innerText = totalAtk.toLocaleString();
-    if (defEl) defEl.innerText = totalDef.toLocaleString();
-}
-
-function calculateBattleResult(playerCards, cpuCards, tagMaster) {
-    const pPower = playerCards.reduce((sum, c) => sum + (parseInt(c.power, 10) || 0), 0);
-    const cPower = cpuCards.reduce((sum, c) => sum + (parseInt(c.power, 10) || 0), 0);
-
-    const pPoker = getPokerHandInfo(playerCards);
-    const cPoker = getPokerHandInfo(cpuCards);
-
-    const pFinalAtk = Math.round(pPower * pPoker.multiplier);
-    const pFinalDef = Math.round(pPower * pPoker.multiplier);
-    const cFinalAtk = Math.round(cPower * cPoker.multiplier);
-    const cFinalDef = Math.round(cPower * cPoker.multiplier);
-
-    const damageToCpu = Math.max(0, pFinalAtk - cFinalDef);
-    const damageToPlayer = Math.max(0, cFinalAtk - pFinalDef);
-
-    return {
-        jankenResultText: "引き分け",
-        player: { basePowerSum: pPower, pokerInfo: pPoker, pokerMult: pPoker.multiplier, jankenMult: 1.0, finalAtk: pFinalAtk, finalDef: pFinalDef, damageGiven: damageToCpu },
-        cpu: { basePowerSum: cPower, pokerInfo: cPoker, pokerMult: cPoker.multiplier, jankenMult: 1.0, finalAtk: cFinalAtk, finalDef: cFinalDef, damageGiven: damageToPlayer }
-    };
-}
-
-function triggerTurnCutin(turnNumber, callback) {
-    const overlay = document.getElementById('turn-cutin-overlay');
-    const textEl = document.getElementById('turn-cutin-text');
-
-    if (!overlay || !textEl) {
-        if (callback) callback();
-        return;
-    }
-
-    textEl.innerText = `第${turnNumber}陣 開始！`;
-    overlay.classList.remove('hidden');
-
-    requestAnimationFrame(() => {
-        setTimeout(() => overlay.classList.add('active'), 20);
-    });
-
-    setTimeout(() => {
-        overlay.classList.remove('active');
-        setTimeout(() => {
-            overlay.classList.add('hidden');
-            if (callback) callback();
-        }, 300);
-    }, 1500);
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initP2PGame);
-} else {
-    initP2PGame();
-}
+        battleStartBtn.innerText = "⚔️ 戦闘
