@@ -60,6 +60,7 @@ const gameState = {
     cpuHand: [],
     displayMode: 'illust',
     tagMaster: {},
+    jokerResults: [], // ★ main.js 準拠: joker_results.csv 保持用
     bgmMaster: [],
     turn: 1,
     maxTurn: 5,
@@ -91,6 +92,7 @@ async function initP2PGame() {
 
     gameState.allCards = loadedData.cardsDb;
     gameState.tagMaster = loadedData.tagMaster || {};
+    gameState.jokerResults = loadedData.jokerResults || []; // ★ main.js 準拠: JOKER勝利イラストデータ読み込み
     gameState.bgmMaster = loadedData.bgmMaster || [];
 
     // 1. title / p2p_room から引き継いだ設定の読み込み
@@ -207,8 +209,8 @@ function initP2PNetworkConnection() {
                 .map(id => gameState.cpuHand.find(c => String(c.id || c.cardId) === String(id)))
                 .filter(Boolean);
 
-            // 本格戦闘判定エンジン（特性タグ・ジャンケン・ポーカー役フル対応）
-            const battleResult = calculateBattleResultFull(playerCards, cpuCards, gameState.tagMaster);
+            // ★ main.js 準拠: 完全判定エンジンで計算
+            const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
             gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
 
             gameState.turnHistory[gameState.turn - 1] = {
@@ -407,38 +409,87 @@ function showBattleConfirmModal() {
         }).join('');
     }
 
-    const sideEval = evaluateSide(selectedCards, gameState.tagMaster);
+    const counts = { gu: 0, cho: 0, pa: 0 };
+    selectedCards.forEach(c => { if (counts[c.janken] !== undefined) counts[c.janken]++; });
+
+    let finalHandIcon = '❓';
+    if (counts.gu === 3 || counts.gu === 2) finalHandIcon = '✊';
+    else if (counts.cho === 3 || counts.cho === 2) finalHandIcon = '✌️';
+    else if (counts.pa === 3 || counts.pa === 2) finalHandIcon = '✋';
+    else if (counts.gu === 1 && counts.cho === 1 && counts.pa === 1) finalHandIcon = '✨';
+
+    const pokerInfo = getPokerHandInfo(selectedCards);
 
     const jankenEl = document.getElementById('modal-confirm-janken');
-    if (jankenEl) jankenEl.innerText = sideEval.jankenSummary;
-
     const pokerEl = document.getElementById('modal-confirm-poker');
-    if (pokerEl) pokerEl.innerText = sideEval.pokerInfo.name;
+    if (jankenEl) jankenEl.innerText = finalHandIcon;
+    if (pokerEl) pokerEl.innerText = pokerInfo.name;
+
+    let baseMultSum = 1.0;
+    let atkMultSum = 1.0;
+    let defMultSum = 1.0;
+
+    const tagCounts = {};
+    selectedCards.forEach(c => {
+        if (Array.isArray(c.tags)) {
+            c.tags.forEach(t => {
+                const rawName = (typeof t === 'object' ? (t.name || t.label) : String(t)).replace(/[\(（].*?[\)）]/, '').trim();
+                if (rawName) tagCounts[rawName] = (tagCounts[rawName] || 0) + 1;
+            });
+        }
+    });
+
+    const activeEntries = Object.entries(tagCounts).filter(([tagName, cnt]) => {
+        const cleanKey = String(tagName).trim();
+        const master = gameState.tagMaster[cleanKey] || { minCards: 2 };
+        return cnt >= master.minCards;
+    });
 
     const tagsContainer = document.getElementById('modal-confirm-tags');
     if (tagsContainer) {
-        if (sideEval.activeTags.length === 0) {
-            tagsContainer.innerHTML = `<span class="col-span-2 text-xs text-slate-500 italic text-center py-2">発動特性なし</span>`;
-        } else {
-            tagsContainer.innerHTML = sideEval.activeTags.map(t => {
-                const conf = CATEGORY_CONFIG[t.category] || CATEGORY_CONFIG.GEN;
-                return `
-                    <div class="flex items-center justify-between p-1.5 rounded-lg border ${conf.color} text-xs font-bold shadow">
-                        <span class="flex items-center gap-1 truncate">
-                            <i class="fa-solid ${conf.icon}"></i>
-                            <span class="truncate">${t.name} (${t.rank})</span>
-                        </span>
-                        <span class="font-mono text-amber-300 ml-1">x${t.mult.toFixed(2)}</span>
-                    </div>
-                `;
-            }).join('');
+        const slotsHTML = [];
+        activeEntries.forEach(([tagName, cnt]) => {
+            const cleanKey = String(tagName).trim();
+            const master = gameState.tagMaster[cleanKey] || { category: "GEN", rank: "C", mult1: 1.0, mult2: 1.2, mult3: 1.5 };
+            const config = CATEGORY_CONFIG[master.category] || CATEGORY_CONFIG.GEN;
+
+            let multiplier = 1.0;
+            if (cnt === 1) multiplier = master.mult1;
+            else if (cnt === 2) multiplier = master.mult2;
+            else if (cnt >= 3) multiplier = master.mult3;
+
+            if (master.category === 'GEN' || master.category === 'SUP') baseMultSum *= multiplier;
+            else if (master.category === 'ATK') atkMultSum *= multiplier;
+            else if (master.category === 'DEF') defMultSum *= multiplier;
+
+            slotsHTML.push(`
+                <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${config.color} text-xs sm:text-sm font-bold shadow-md min-h-[36px] leading-tight">
+                    <span class="truncate flex items-center gap-1.5">
+                        <i class="fa-solid ${config.icon} text-xs flex-shrink-0"></i>
+                        <span class="truncate">${cleanKey}(${master.rank})</span>
+                    </span>
+                    <span class="text-yellow-300 font-mono font-black text-xs sm:text-sm flex-shrink-0">×${multiplier}</span>
+                </div>
+            `);
+        });
+
+        while (slotsHTML.length < 6) {
+            slotsHTML.push(`<div class="rounded-lg border border-slate-800/40 bg-slate-950/20 min-h-[36px]"></div>`);
         }
+
+        tagsContainer.innerHTML = slotsHTML.slice(0, 6).join('');
     }
+
+    const basePowerSum = selectedCards.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
+    const pokerMult = pokerInfo.multiplier;
+
+    const totalAtk = Math.round(basePowerSum * baseMultSum * atkMultSum * pokerMult);
+    const totalDef = Math.round(basePowerSum * baseMultSum * defMultSum * pokerMult);
 
     const atkEl = document.getElementById('modal-confirm-atk');
     const defEl = document.getElementById('modal-confirm-def');
-    if (atkEl) atkEl.innerText = sideEval.finalAtk.toLocaleString();
-    if (defEl) defEl.innerText = sideEval.finalDef.toLocaleString();
+    if (atkEl) atkEl.innerText = totalAtk.toLocaleString();
+    if (defEl) defEl.innerText = totalDef.toLocaleString();
 
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
@@ -453,9 +504,14 @@ function hideBattleConfirmModal() {
 }
 
 // -------------------------------------------------------------
-// バトル演出再生・リザルトモーダル連動
+// ★ main.js 準拠: アニメーション演出＆結果動的構築
 // -------------------------------------------------------------
 async function runBattleAnimation(playerCards, cpuCards, battleResult) {
+    const calcAtkText = document.getElementById('calc-total-atk')?.innerText.replace(/,/g, '') || '0';
+    const calcDefText = document.getElementById('calc-total-def')?.innerText.replace(/,/g, '') || '0';
+    const calcAtkVal = parseInt(calcAtkText, 10);
+    const calcDefVal = parseInt(calcDefText, 10);
+
     const whiteout = document.getElementById('battle-animation-overlay');
 
     if (whiteout) {
@@ -481,44 +537,130 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         };
     });
 
+    const rawTagDetails = battleResult.cpu.tagDetails || [];
+    const categoryPriority = { GEN: 1, SUP: 2, ATK: 3, DEF: 4, DEB: 5 };
+
+    const sortedTagDetails = [...rawTagDetails].sort((a, b) => {
+        const multA = a.mult || 1.0;
+        const multB = b.mult || 1.0;
+        if (multA !== multB) return multA - multB;
+        const pA = categoryPriority[a.category] || 99;
+        const pB = categoryPriority[b.category] || 99;
+        return pA - pB;
+    });
+
+    let runningAtkMult = 1.0;
+    let runningDefMult = 1.0;
+
+    const formattedTags = sortedTagDetails.map((t) => {
+        const tagName = t.name;
+        const mult = t.mult || 1.0;
+        const category = t.category || 'GEN';
+
+        if (category === 'ATK') runningAtkMult *= mult;
+        else if (category === 'DEF') runningDefMult *= mult;
+        else if (category === 'GEN' || category === 'SUP') {
+            runningAtkMult *= mult;
+            runningDefMult *= mult;
+        }
+
+        const matchingIndexes = [];
+        cpuCards.forEach((card, index) => {
+            if (!card) return;
+            let rawTags = card.tags || card.tag || [];
+            let tagArray = [];
+            if (Array.isArray(rawTags)) {
+                tagArray = rawTags.map(item => typeof item === 'object' ? (item.name || item.label || '') : String(item));
+            } else if (typeof rawTags === 'string') {
+                tagArray = rawTags.split(',').map(s => s.trim());
+            }
+
+            const hasTag = tagArray.some(raw => {
+                const clean = String(raw).replace(/[\(（].*?[\)）]/, '').trim();
+                return clean === tagName.trim();
+            });
+
+            if (hasTag) matchingIndexes.push(index);
+        });
+
+        const targetIdxs = matchingIndexes.length > 0 ? matchingIndexes : [0, 1, 2];
+
+        return {
+            name: t.name,
+            category: category,
+            targetIndexes: targetIdxs,
+            atkMult: runningAtkMult,
+            defMult: runningDefMult
+        };
+    });
+
+    const tagTotalAtkMult = runningAtkMult;
+    const tagTotalDefMult = runningDefMult;
+
+    const cpuPokerInfo = battleResult.cpu.pokerInfo || { name: '役なし', multiplier: 1.0 };
+    const pokerMult = cpuPokerInfo.multiplier || 1.0;
+
+    const afterPokerAtkMult = tagTotalAtkMult * pokerMult;
+    const afterPokerDefMult = tagTotalDefMult * pokerMult;
+
+    const cpuPokerData = {
+        name: cpuPokerInfo.name,
+        multiplier: pokerMult,
+        atkMult: afterPokerAtkMult,
+        defMult: afterPokerDefMult
+    };
+
+    const cpuJankenMult = battleResult.cpu.jankenMult || 1.0;
+    const afterJankenAtkMult = afterPokerAtkMult * cpuJankenMult;
+    const afterJankenDefMult = afterPokerDefMult * cpuJankenMult;
+
+    const jankenData = {
+        title: `✊ VS ✌️ じゃんけん結果：${battleResult.jankenResultText || '勝負'}`,
+        sub: `自軍補正 ×${battleResult.player.jankenMult} / 敵軍補正 ×${battleResult.cpu.jankenMult}`,
+        atkMult: afterJankenAtkMult,
+        defMult: afterJankenDefMult
+    };
+
+    const playerDebuffList = (battleResult.player.tagDetails || []).filter(t => t.category === 'DEB');
+    const enemyDebuffList = (battleResult.cpu.tagDetails || []).filter(t => t.category === 'DEB');
+
+    const playerDebMultToCpu = battleResult.player.debMultToEnemy || 1.0;
+    const afterDebuffAtkMult = afterJankenAtkMult * playerDebMultToCpu;
+    const afterDebuffDefMult = afterJankenDefMult * playerDebMultToCpu;
+
     const isGameOver = (
         gameState.playerHp - battleResult.cpu.damageGiven <= 0 ||
         gameState.cpuHp - battleResult.player.damageGiven <= 0 ||
         gameState.turn >= gameState.maxTurn
     );
 
-    // 演出アニメーション（battle-animation.js）が欲しがる完全データを生成
     const animData = {
         cpuCards: formattedCpuCards,
         enemyBaseAtk: battleResult.cpu.basePowerSum,
         enemyBaseDef: battleResult.cpu.basePowerSum,
-        tags: battleResult.cpu.activeTags.map(t => ({
-            name: `${t.name}(${t.rank})`,
-            category: t.category,
-            targetIndexes: t.cardIndexes,
-            atkMult: battleResult.cpu.atkMult,
-            defMult: battleResult.cpu.defMult,
-            debMult: t.mult
-        })),
-        poker: { name: battleResult.cpu.pokerInfo.name, multiplier: battleResult.cpu.pokerMult },
-        janken: {
-            title: `⚔️ じゃんけん結果：${battleResult.jankenResultText}`,
-            sub: `自軍補正 ×${battleResult.player.jankenMult} / 敵軍補正 ×${battleResult.cpu.jankenMult}`,
-            atkMult: battleResult.cpu.jankenMult,
-            defMult: battleResult.cpu.jankenMult
-        },
-        playerBaseAtk: battleResult.player.basePowerSum,
-        playerBaseDef: battleResult.player.basePowerSum,
-        playerAfterJankenAtk: Math.round(battleResult.player.basePowerSum * battleResult.player.atkMult * battleResult.player.pokerMult * battleResult.player.jankenMult),
-        playerAfterJankenDef: Math.round(battleResult.player.basePowerSum * battleResult.player.defMult * battleResult.player.pokerMult * battleResult.player.jankenMult),
+        tags: formattedTags,
+        poker: cpuPokerData,
+        janken: jankenData,
+        playerDebuffs: playerDebuffList.map(d => ({ name: d.name, mult: d.mult })),
+        enemyDebuffs: enemyDebuffList.map(d => ({ name: d.name, mult: d.mult })),
+        playerBaseAtk: calcAtkVal,
+        playerBaseDef: calcDefVal,
+        playerAfterJankenAtk: Math.round(calcAtkVal * (battleResult.player.jankenMult || 1.0)),
+        playerAfterJankenDef: Math.round(calcDefVal * (battleResult.player.jankenMult || 1.0)),
         playerAtk: battleResult.player.finalAtk,
         playerDef: battleResult.player.finalDef,
+        enemyAfterDebuffAtkMult: afterDebuffAtkMult,
+        enemyAfterDebuffDefMult: afterDebuffDefMult,
         enemyFinalAtk: battleResult.cpu.finalAtk,
         enemyFinalDef: battleResult.cpu.finalDef,
-        playerDebuffs: battleResult.cpu.activeTags.filter(t => t.category === 'DEB'),
-        enemyDebuffs: battleResult.player.activeTags.filter(t => t.category === 'DEB'),
         isGameOver: isGameOver
     };
+
+    let retryCount = 0;
+    while (!window.battleAnim && retryCount < 10) {
+        await sleep(100);
+        retryCount++;
+    }
 
     if (window.battleAnim) {
         await window.battleAnim.play(animData);
@@ -537,94 +679,204 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         else if (gameState.playerHp > gameState.cpuHp) resultType = 'win_normal';
         else resultType = 'lose_normal';
 
+        playSceneBGM(resultType, true);
+
         showGameResultCutin(resultType);
+        await sleep(200);
+
+        const whiteOverlay = document.querySelector('.whiteout-transition-overlay');
+        if (whiteOverlay) {
+            whiteOverlay.style.opacity = '0';
+            await sleep(500);
+            whiteOverlay.remove();
+        }
     } else {
+        let sumiEl = document.querySelector('.sumi-arashi-overlay');
+        if (!sumiEl) {
+            sumiEl = document.createElement('div');
+            sumiEl.className = 'sumi-arashi-overlay';
+            document.body.appendChild(sumiEl);
+            await sleep(400);
+        }
+
         showTurnResultModal(playerCards, cpuCards, battleResult);
+        await sleep(200);
+
+        sumiEl.style.transition = 'opacity 0.4s ease-out';
+        sumiEl.style.opacity = '0';
+        await sleep(400);
+        sumiEl.remove();
     }
 }
 
-// ターン結果リザルト（明細レシート）の描画
-function showTurnResultModal(playerCards, cpuCards, battleResult) {
+// ★ main.js 準拠: 過去ターン切替対応版 ターン結果モーダル
+function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex = null) {
     const modal = document.getElementById('turn-result-modal');
     if (!modal) return;
+    modal.style.zIndex = '900000';
 
-    const setCardsHTML = (containerId, cards) => {
-        const el = document.getElementById(containerId);
-        if (!el) return;
-        el.innerHTML = cards.map(c => {
-            const img = (gameState.displayMode === 'real' ? c.imageReal : c.imageIllust) || `${c.id}_illust.jpg`;
-            return `
-                <div class="aspect-[3/4] bg-slate-900 rounded overflow-hidden border border-slate-700">
-                    <img src="images/${img}" class="w-full h-full object-cover">
-                </div>
-            `;
-        }).join('');
+    const targetTurnIdx = viewTurnIndex !== null ? viewTurnIndex : (gameState.turnHistory.length - 1);
+    const historyData = gameState.turnHistory[targetTurnIdx];
+
+    const currentPCards = historyData ? historyData.playerCards : playerCards;
+    const currentCCards = historyData ? historyData.cpuCards : cpuCards;
+    const currentResult = historyData ? historyData.battleResult : battleResult;
+
+    const setSafeHTML = (id, html) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+    };
+    const setSafeText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = text;
     };
 
-    setCardsHTML('res-p-cards', playerCards);
-    setCardsHTML('res-c-cards', cpuCards);
+    const renderMiniCards = (cards) => cards.map(c => {
+        const img = (gameState.displayMode === 'real' ? c.imageReal : c.imageIllust) || `${c.id}_illust.jpg`;
+        return `
+            <div class="flex flex-col items-center min-w-0">
+                <div class="w-full aspect-[3/4] bg-slate-900 rounded overflow-hidden border border-slate-700">
+                    <img src="images/${img}" class="w-full h-full object-cover object-top" onerror="this.src='images/default.jpg';">
+                </div>
+                <span class="text-[9px] font-normal text-slate-300 truncate w-full text-center mt-0.5 leading-tight">${c.name}</span>
+            </div>
+        `;
+    }).join('');
 
-    document.getElementById('res-p-power').innerText = battleResult.player.basePowerSum.toLocaleString();
-    document.getElementById('res-c-power').innerText = battleResult.cpu.basePowerSum.toLocaleString();
+    setSafeHTML('res-p-cards', renderMiniCards(currentPCards));
+    setSafeHTML('res-c-cards', renderMiniCards(currentCCards));
 
-    document.getElementById('res-p-poker').innerText = battleResult.player.pokerInfo.name;
-    document.getElementById('res-c-poker').innerText = battleResult.cpu.pokerInfo.name;
+    setSafeText('res-p-power', currentResult.player.basePowerSum.toLocaleString());
+    setSafeText('res-c-power', currentResult.cpu.basePowerSum.toLocaleString());
 
-    const renderTagList = (targetId, catKey) => {
-        const el = document.getElementById(targetId);
-        if (!el) return;
-        const pTags = battleResult.player.activeTags.filter(t => t.category === catKey);
-        const cTags = battleResult.cpu.activeTags.filter(t => t.category === catKey);
+    setSafeText('res-p-poker', `${currentResult.player.pokerInfo.name}`);
+    setSafeText('res-c-poker', `${currentResult.cpu.pokerInfo.name}`);
 
-        if (pTags.length === 0 && cTags.length === 0) {
-            el.innerHTML = `<div class="text-[10px] text-slate-600 italic">発動なし</div>`;
-            return;
+    const renderCategoryRows = (catKey) => {
+        const pTags = currentResult.player.tagDetails ? currentResult.player.tagDetails.filter(t => t.category === catKey) : [];
+        const cTags = currentResult.cpu.tagDetails ? currentResult.cpu.tagDetails.filter(t => t.category === catKey) : [];
+        const maxLen = Math.max(pTags.length, cTags.length);
+
+        if (maxLen === 0) {
+            return `<div class="grid grid-cols-12 gap-2 text-[10px] text-slate-600 italic">
+                <div class="col-span-5 text-center">なし</div>
+                <div class="col-span-2 text-center text-slate-800">|</div>
+                <div class="col-span-5 text-center">なし</div>
+            </div>`;
         }
 
         let html = '';
-        const maxLen = Math.max(pTags.length, cTags.length);
         for (let i = 0; i < maxLen; i++) {
-            const pt = pTags[i];
-            const ct = cTags[i];
+            const p = pTags[i] ? `${pTags[i].name} (x${pTags[i].mult})` : '-';
+            const c = cTags[i] ? `${cTags[i].name} (x${cTags[i].mult})` : '-';
             html += `
                 <div class="grid grid-cols-12 gap-2 text-[11px] items-center">
-                    <div class="col-span-5 text-emerald-300 truncate">${pt ? `${pt.name}(${pt.rank}) x${pt.mult.toFixed(2)}` : '-'}</div>
+                    <div class="col-span-5 text-center truncate ${p !== '-' ? 'text-emerald-300 font-bold' : 'text-slate-600'}">${p}</div>
                     <div class="col-span-2 text-center text-slate-700">|</div>
-                    <div class="col-span-5 text-rose-300 truncate">${ct ? `${ct.name}(${ct.rank}) x${ct.mult.toFixed(2)}` : '-'}</div>
+                    <div class="col-span-5 text-center truncate ${c !== '-' ? 'text-rose-300 font-bold' : 'text-slate-600'}">${c}</div>
                 </div>
             `;
         }
-        el.innerHTML = html;
+        return html;
     };
 
-    renderTagList('res-list-gen', 'GEN');
-    renderTagList('res-list-atk', 'ATK');
-    renderTagList('res-list-def', 'DEF');
-    renderTagList('res-list-sup', 'SUP');
-    renderTagList('res-list-deb', 'DEB');
+    setSafeHTML('res-list-gen', renderCategoryRows('GEN'));
+    setSafeHTML('res-list-atk', renderCategoryRows('ATK'));
+    setSafeHTML('res-list-def', renderCategoryRows('DEF'));
+    setSafeHTML('res-list-sup', renderCategoryRows('SUP'));
+    setSafeHTML('res-list-deb', renderCategoryRows('DEB'));
 
-    document.getElementById('res-mid-p-atk').innerText = Math.round(battleResult.player.basePowerSum * battleResult.player.atkMult * battleResult.player.pokerMult).toLocaleString();
-    document.getElementById('res-mid-p-def').innerText = Math.round(battleResult.player.basePowerSum * battleResult.player.defMult * battleResult.player.pokerMult).toLocaleString();
-    document.getElementById('res-mid-c-atk').innerText = Math.round(battleResult.cpu.basePowerSum * battleResult.cpu.atkMult * battleResult.cpu.pokerMult).toLocaleString();
-    document.getElementById('res-mid-c-def').innerText = Math.round(battleResult.cpu.basePowerSum * battleResult.cpu.defMult * battleResult.cpu.pokerMult).toLocaleString();
+    const midPAtk = Math.round(currentResult.player.basePowerSum * currentResult.player.genSupMult * currentResult.player.atkMult * currentResult.player.pokerMult);
+    const midPDef = Math.round(currentResult.player.basePowerSum * currentResult.player.genSupMult * currentResult.player.defMult * currentResult.player.pokerMult);
+    const midCAtk = Math.round(currentResult.cpu.basePowerSum * currentResult.cpu.genSupMult * currentResult.cpu.atkMult * currentResult.cpu.pokerMult);
+    const midCDef = Math.round(currentResult.cpu.basePowerSum * currentResult.cpu.genSupMult * currentResult.cpu.defMult * currentResult.cpu.pokerMult);
 
-    document.getElementById('res-janken-text').innerText = battleResult.jankenResultText;
-    document.getElementById('res-p-janken-mult').innerText = `自軍補正: x${battleResult.player.jankenMult}`;
-    document.getElementById('res-c-janken-mult').innerText = `敵軍補正: x${battleResult.cpu.jankenMult}`;
+    setSafeText('res-mid-p-atk', midPAtk.toLocaleString());
+    setSafeText('res-mid-p-def', midPDef.toLocaleString());
+    setSafeText('res-mid-c-atk', midCAtk.toLocaleString());
+    setSafeText('res-mid-c-def', midCDef.toLocaleString());
 
-    document.getElementById('res-final-p-atk').innerText = battleResult.player.finalAtk.toLocaleString();
-    document.getElementById('res-final-p-def').innerText = battleResult.player.finalDef.toLocaleString();
-    document.getElementById('res-final-c-atk').innerText = battleResult.cpu.finalAtk.toLocaleString();
-    document.getElementById('res-final-c-def').innerText = battleResult.cpu.finalDef.toLocaleString();
+    setSafeText('res-janken-text', currentResult.jankenResultText);
+    setSafeText('res-p-janken-mult', `自軍補正: x${currentResult.player.jankenMult}`);
+    setSafeText('res-c-janken-mult', `敵軍補正: x${currentResult.cpu.jankenMult}`);
 
-    document.getElementById('res-damage-given-cpu').innerText = battleResult.player.damageGiven.toLocaleString();
-    document.getElementById('res-damage-given-player').innerText = battleResult.cpu.damageGiven.toLocaleString();
+    setSafeText('res-final-p-atk', currentResult.player.finalAtk.toLocaleString());
+    setSafeText('res-final-p-def', currentResult.player.finalDef.toLocaleString());
+    setSafeText('res-final-c-atk', currentResult.cpu.finalAtk.toLocaleString());
+    setSafeText('res-final-c-def', currentResult.cpu.finalDef.toLocaleString());
+
+    setSafeText('res-damage-given-cpu', currentResult.player.damageGiven.toLocaleString());
+    setSafeText('res-damage-given-player', currentResult.cpu.damageGiven.toLocaleString());
+
+    const tabContainer = document.getElementById('result-turn-tab-container');
+    if (tabContainer) {
+        const turnLabels = ["第１陣", "第２陣", "第３陣", "第４陣", "最終決戦"];
+        let tabsHTML = '';
+
+        for (let i = 0; i < 5; i++) {
+            const hasData = i < gameState.turnHistory.length;
+            const isSelected = i === targetTurnIdx;
+
+            let btnStyle = "";
+            if (isSelected) {
+                btnStyle = "bg-amber-500 text-slate-950 font-black border-amber-300 shadow-md scale-105";
+            } else if (hasData) {
+                btnStyle = "bg-slate-900 text-amber-300 hover:bg-slate-800 border-slate-700 cursor-pointer";
+            } else {
+                btnStyle = "bg-slate-950/40 text-slate-600 border-slate-900 cursor-not-allowed opacity-40";
+            }
+
+            tabsHTML += `
+                <button 
+                    onclick="window.switchResultTurnTab(${i})" 
+                    ${!hasData ? 'disabled' : ''} 
+                    class="w-full py-2 px-1 rounded-xl border text-[10px] sm:text-xs font-yuji transition-all text-center ${btnStyle}">
+                    ${turnLabels[i]}
+                </button>
+            `;
+        }
+        tabContainer.innerHTML = tabsHTML;
+    }
+
+    const nextBtn = document.getElementById('btn-next-turn');
+    if (nextBtn) {
+        const isGameOver = (
+            gameState.playerHp <= 0 || 
+            gameState.cpuHp <= 0 || 
+            gameState.turn >= gameState.maxTurn
+        );
+
+        if (isGameOver) {
+            nextBtn.innerText = '➔ 決着画面に戻る';
+        } else {
+            nextBtn.innerText = '次のターンへ進む ➔';
+        }
+    }
 
     modal.classList.remove('hidden');
 }
 
+window.switchResultTurnTab = function(turnIndex) {
+    if (gameState.turnHistory[turnIndex]) {
+        const data = gameState.turnHistory[turnIndex];
+        showTurnResultModal(data.playerCards, data.cpuCards, data.battleResult, turnIndex);
+    }
+};
+
 function proceedToNextTurn() {
     const modal = document.getElementById('turn-result-modal');
+    
+    const isGameOver = (
+        gameState.playerHp <= 0 || 
+        gameState.cpuHp <= 0 || 
+        gameState.turn >= gameState.maxTurn
+    );
+
+    if (isGameOver) {
+        if (modal) modal.classList.add('hidden');
+        return;
+    }
+
     if (modal) modal.classList.add('hidden');
 
     if (!gameState.lastBattleResult) return;
@@ -652,18 +904,36 @@ function proceedToNextTurn() {
     });
 }
 
-function showGameResultCutin(resultType) {
+// ★ main.js 準拠: jokerResults CSV連動 勝敗1枚絵カットイン表示関数
+function showGameResultCutin() {
     const modal = document.getElementById('game-result-cutin-modal');
     const cutinImg = document.getElementById('result-cutin-img');
+    const toResultBtn = document.getElementById('btn-cutin-to-result');
+    const restartBtn = document.getElementById('btn-cutin-restart');
     const titleBtn = document.getElementById('btn-cutin-title');
 
     if (!modal || !cutinImg) return;
 
-    cutinImg.src = `images/himiko_${resultType}.jpg`;
+    const playerJokerId = gameState.playerDeckIds[0] || 'c00000';
+    let resultType = 'win_normal';
+    if (gameState.cpuHp <= 0) resultType = 'win_perfect';
+    else if (gameState.playerHp <= 0) resultType = 'lose_perfect';
+    else if (gameState.playerHp > gameState.cpuHp) resultType = 'win_normal';
+    else resultType = 'lose_normal';
+
+    const jokerSetting = gameState.jokerResults.find(r => (r.joker_id || r.jokerId) === String(playerJokerId));
+    let fileName = jokerSetting ? (jokerSetting[resultType] || '') : '';
+    const imagePath = fileName ? `images/${fileName}` : `images/himiko_${resultType}.jpg`;
+    
+    cutinImg.src = imagePath;
     cutinImg.onerror = () => { cutinImg.src = 'images/default.jpg'; };
 
+    modal.style.zIndex = '800000';
     modal.classList.remove('hidden');
-    requestAnimationFrame(() => modal.classList.add('active'));
+    requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        modal.classList.add('active');
+    });
 
     if (titleBtn) {
         titleBtn.onclick = () => {
@@ -672,15 +942,28 @@ function showGameResultCutin(resultType) {
             window.location.href = 'title.html';
         };
     }
+
+    if (toResultBtn) {
+        toResultBtn.onclick = () => {
+            if (gameState.lastBattleResult) {
+                const nextBtn = document.getElementById('btn-next-turn');
+                if (nextBtn) nextBtn.innerText = '➔ 決着画面に戻る';
+
+                const { playerCards, cpuCards, battleResult } = gameState.lastBattleResult;
+                showTurnResultModal(playerCards, cpuCards, battleResult);
+            }
+        };
+    }
 }
 
+// ★ main.js 準拠: UI更新（敵軍危険度判定＆点滅表示含む）
 function refreshAllUI() {
     const turnEl = document.getElementById('current-turn-num');
     if (turnEl) turnEl.innerText = `${Math.min(gameState.turn, gameState.maxTurn)}/${gameState.maxTurn}`;
 
     updateBattleStartButtonUI();
 
-    const playerHpEl = document.getElementById('player-hp-text');
+    const playerHpEl = document.getElementById('player-hp-text') || document.getElementById('player-hp-num');
     if (playerHpEl) playerHpEl.innerText = `${gameState.playerHp.toLocaleString()} / ${INITIAL_HP.toLocaleString()}`;
 
     const playerHpBar = document.getElementById('player-hp-bar');
@@ -689,7 +972,7 @@ function refreshAllUI() {
         playerHpBar.style.width = `${playerPct}%`;
     }
 
-    const cpuHpEl = document.getElementById('cpu-hp-text');
+    const cpuHpEl = document.getElementById('cpu-hp-text') || document.getElementById('cpu-hp-num');
     if (cpuHpEl) cpuHpEl.innerText = `${gameState.cpuHp.toLocaleString()} / ${INITIAL_HP.toLocaleString()}`;
 
     const cpuHpBar = document.getElementById('cpu-hp-bar');
@@ -707,9 +990,35 @@ function refreshAllUI() {
             const imageName = gameState.displayMode === 'real'
                 ? (gameState.cpuJoker.imageReal || gameState.cpuJoker.image_real)
                 : (gameState.cpuJoker.imageIllust || gameState.cpuJoker.image_illust);
-            cpuImgEl.src = imageName ? `images/${imageName}` : 'images/default.jpg';
+            
+            if (imageName) {
+                cpuImgEl.src = `images/${imageName}`;
+            } else {
+                cpuImgEl.src = 'images/default.jpg';
+            }
+            cpuImgEl.onerror = () => { cpuImgEl.src = 'images/default.jpg'; };
         }
     }
+
+    const cpuCounts = { gu: 0, cho: 0, pa: 0 };
+    const allCpuCards = [
+        ...(Array.isArray(gameState.cpuHand) ? gameState.cpuHand : []),
+        ...(Array.isArray(gameState.cpuDeck) ? gameState.cpuDeck : [])
+    ];
+
+    allCpuCards.forEach(card => {
+        if (card && cpuCounts[card.janken] !== undefined) {
+            cpuCounts[card.janken]++;
+        }
+    });
+
+    const cpuGuEl = document.getElementById('cpu-deck-gu');
+    const cpuChoEl = document.getElementById('cpu-deck-cho');
+    const cpuPaEl = document.getElementById('cpu-deck-pa');
+
+    if (cpuGuEl) cpuGuEl.innerText = `${cpuCounts.gu}枚`;
+    if (cpuChoEl) cpuChoEl.innerText = `${cpuCounts.cho}枚`;
+    if (cpuPaEl) cpuPaEl.innerText = `${cpuCounts.pa}枚`;
 
     const handContainer = document.getElementById('player-hand-container');
     if (handContainer && gameModules && gameModules.renderBattleUI) {
@@ -719,222 +1028,364 @@ function refreshAllUI() {
         });
     }
 
+    // ★ main.js 準拠: 危険度判定＆点滅演出の適用
+    const cpuJokerBox = document.getElementById('cpu-joker-box');
+    const cpuDangerEl = document.getElementById('cpu-danger-level');
+
+    if (cpuJokerBox && cpuDangerEl && Array.isArray(gameState.cpuHand)) {
+        const cpuHandPowerSum = gameState.cpuHand.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
+
+        cpuJokerBox.classList.remove('danger-mid-glow', 'danger-high-glow', 'danger-extreme-glow');
+
+        if (cpuHandPowerSum >= 3600) {
+            cpuJokerBox.classList.add('danger-extreme-glow');
+            cpuDangerEl.innerText = '危険度：特大 ⚠️';
+            cpuDangerEl.className = 'text-xs font-black mt-0.5 text-rose-400 animate-pulse';
+        } else if (cpuHandPowerSum >= 2900) {
+            cpuJokerBox.classList.add('danger-high-glow');
+            cpuDangerEl.innerText = '危険度：大 ⚠️';
+            cpuDangerEl.className = 'text-xs font-bold mt-0.5 text-rose-300';
+        } else if (cpuHandPowerSum >= 2250) {
+            cpuJokerBox.classList.add('danger-mid-glow');
+            cpuDangerEl.innerText = '危険度：中 ⚡';
+            cpuDangerEl.className = 'text-xs font-bold mt-0.5 text-amber-300';
+        } else {
+            cpuDangerEl.innerText = '危険度：小 🛡️';
+            cpuDangerEl.className = 'text-xs font-bold mt-0.5 text-slate-400';
+        }
+    }
+
     updateCalculatorUI();
 }
 
-// -------------------------------------------------------------
-// 本格戦闘判定エンジン（特性タグ・ポーカー役・ジャンケン判定）
-// -------------------------------------------------------------
+// ★ main.js 準拠: ポーカー役フル判定 (スリーカード, ストレート, ワンペア, 役なし, JOKER判定)
 function getPokerHandInfo(cards) {
-    if (!cards || cards.length !== 3) return { name: '役なし', multiplier: 1.0 };
+    if (!cards || cards.length !== 3) {
+        return { name: '役なし', multiplier: 1.0 };
+    }
+
     const ranks = cards.map(c => String(c.rank || '1').toUpperCase());
     const jokerCount = ranks.filter(r => r === 'JOKER' || r === 'JK').length;
+    const normalRanks = ranks.filter(r => r !== 'JOKER' && r !== 'JK');
+
     if (jokerCount >= 2) return { name: 'スリーカード ✨2.0倍', multiplier: 2.0 };
+    if (jokerCount === 1) {
+        if (normalRanks[0] === normalRanks[1]) return { name: 'スリーカード ✨2.0倍', multiplier: 2.0 };
+        if (canFormStraightWithJoker(normalRanks)) return { name: 'ストレート ✨1.5倍', multiplier: 1.5 };
+        return { name: 'ワンペア ✨1.2倍', multiplier: 1.2 };
+    }
+
     if (ranks[0] === ranks[1] && ranks[1] === ranks[2]) return { name: 'スリーカード ✨2.0倍', multiplier: 2.0 };
+    if (isStraight(ranks)) return { name: 'ストレート ✨1.5倍', multiplier: 1.5 };
+    if (ranks[0] === ranks[1] || ranks[1] === ranks[2] || ranks[0] === ranks[2]) return { name: 'ワンペア ✨1.2倍', multiplier: 1.2 };
+
     return { name: '役なし', multiplier: 1.0 };
 }
 
+function rankToVal(r) {
+    if (r === 'A') return 1;
+    if (r === 'J') return 11;
+    if (r === 'Q') return 12;
+    if (r === 'K') return 13;
+    const n = parseInt(r, 10);
+    return isNaN(n) ? 0 : n;
+}
+
+function isStraight(ranks) {
+    const vals = ranks.map(rankToVal).sort((a, b) => a - b);
+    if (vals[0] + 1 === vals[1] && vals[1] + 1 === vals[2]) return true;
+    if (vals[0] === 1) {
+        const valsAceHigh = [vals[1], vals[2], 14].sort((a, b) => a - b);
+        if (valsAceHigh[0] + 1 === valsAceHigh[1] && valsAceHigh[1] + 1 === valsAceHigh[2]) return true;
+    }
+    return false;
+}
+
+function canFormStraightWithJoker(normalRanks) {
+    const v1 = rankToVal(normalRanks[0]);
+    const v2 = rankToVal(normalRanks[1]);
+    if (v1 === 0 || v2 === 0) return false;
+    const diff = Math.abs(v1 - v2);
+    return diff === 1 || diff === 2 || (v1 === 1 && v2 >= 12) || (v2 === 1 && v1 >= 12);
+}
+
 function updateCalculatorUI() {
+    const jankenIconsEl = document.getElementById('calc-janken-icons');
+    const pokerRanksEl = document.getElementById('calc-poker-ranks');
+    const tagsEl = document.getElementById('calc-active-tags');
     const atkEl = document.getElementById('calc-total-atk');
     const defEl = document.getElementById('calc-total-def');
 
     const selectedCards = gameState.selectedCardIds
         .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
         .filter(Boolean);
+    const count = selectedCards.length;
 
-    const sideEval = evaluateSide(selectedCards, gameState.tagMaster);
+    const handIcons = selectedCards.map(c => ({ gu: '✊', cho: '✌️', pa: '✋' }[c.janken] || '❓'));
+    let finalHandIcon = '❓';
+    if (count === 3) {
+        const counts = { gu: 0, cho: 0, pa: 0 };
+        selectedCards.forEach(c => { if (counts[c.janken] !== undefined) counts[c.janken]++; });
+        if (counts.gu === 3) finalHandIcon = '✊';
+        else if (counts.cho === 3) finalHandIcon = '✌️';
+        else if (counts.pa === 3) finalHandIcon = '✋';
+        else if (counts.gu === 1 && counts.cho === 1 && counts.pa === 1) finalHandIcon = '✨';
+        else finalHandIcon = counts.gu === 2 ? '✊' : (counts.cho === 2 ? '✌️' : '✋');
+    } else {
+        finalHandIcon = count > 0 ? handIcons[count - 1] : '-';
+    }
 
-    if (atkEl) atkEl.innerText = sideEval.finalAtk.toLocaleString();
-    if (defEl) defEl.innerText = sideEval.finalDef.toLocaleString();
+    if (jankenIconsEl) {
+        jankenIconsEl.innerHTML = count === 0 
+            ? `<span class="text-xs text-slate-500">-</span>` 
+            : `
+            <div class="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold">
+                <span class="${handIcons[0] ? 'opacity-100' : 'opacity-40'}">${handIcons[0] || '-'}</span>
+                <span class="text-slate-600 text-[10px]">|</span>
+                <span class="${handIcons[1] ? 'opacity-100' : 'opacity-40'}">${handIcons[1] || '-'}</span>
+                <span class="text-slate-600 text-[10px]">|</span>
+                <span class="${handIcons[2] ? 'opacity-100' : 'opacity-40'}">${handIcons[2] || '-'}</span>
+                <span class="text-amber-500 font-bold mx-0.5">➡</span>
+                <span class="text-lg sm:text-xl font-black text-yellow-300 drop-shadow">${finalHandIcon}</span>
+            </div>`;
+    }
 
-    const jankenIconsEl = document.getElementById('calc-janken-icons');
-    if (jankenIconsEl) jankenIconsEl.innerText = sideEval.jankenSummary;
+    const pRanks = selectedCards.map(c => {
+        const r = String(c.rank || '1').toUpperCase();
+        return (r === 'JOKER' || r === 'JK') ? 'JK' : r;
+    });
+    const pokerInfo = getPokerHandInfo(selectedCards);
 
-    const pokerRanksEl = document.getElementById('calc-poker-ranks');
-    if (pokerRanksEl) pokerRanksEl.innerText = sideEval.pokerInfo.name;
+    if (pokerRanksEl) {
+        pokerRanksEl.innerHTML = count === 0
+            ? `<span class="text-xs text-slate-500">-</span>`
+            : `
+            <div class="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold font-mono">
+                <span class="${pRanks[0] ? 'opacity-100' : 'opacity-40'}">${pRanks[0] || '-'}</span>
+                <span class="text-slate-600 text-[10px]">|</span>
+                <span class="${pRanks[1] ? 'opacity-100' : 'opacity-40'}">${pRanks[1] || '-'}</span>
+                <span class="text-slate-600 text-[10px]">|</span>
+                <span class="${pRanks[2] ? 'opacity-100' : 'opacity-40'}">${pRanks[2] || '-'}</span>
+                <span class="text-amber-500 font-bold mx-0.5">➡</span>
+                <span class="text-xs sm:text-sm font-black text-yellow-300 font-yuji">${count === 3 ? pokerInfo.name : '選択中...'}</span>
+            </div>`;
+    }
 
-    const activeTagsEl = document.getElementById('calc-active-tags');
-    if (activeTagsEl) {
-        if (sideEval.activeTags.length === 0) {
-            activeTagsEl.innerHTML = `<div class="col-span-2 text-xs text-slate-500 italic text-center py-4">発動特性なし</div>`;
-        } else {
-            activeTagsEl.innerHTML = sideEval.activeTags.map(t => {
-                const conf = CATEGORY_CONFIG[t.category] || CATEGORY_CONFIG.GEN;
-                return `
-                    <div class="flex items-center justify-between p-1 rounded border ${conf.color} text-xs font-bold">
-                        <span class="truncate"><i class="fa-solid ${conf.icon} mr-1"></i>${t.name}</span>
-                        <span class="font-mono text-amber-300">x${t.mult.toFixed(2)}</span>
+    let baseMultSum = 1.0;
+    let atkMultSum = 1.0;
+    let defMultSum = 1.0;
+
+    if (tagsEl) {
+        const tagCounts = {};
+        selectedCards.forEach(c => {
+            if (Array.isArray(c.tags)) {
+                c.tags.forEach(t => {
+                    const rawName = (typeof t === 'object' ? (t.name || t.label) : String(t)).replace(/[\(（].*?[\)）]/, '').trim();
+                    if (rawName) tagCounts[rawName] = (tagCounts[rawName] || 0) + 1;
+                });
+            }
+        });
+
+        const activeEntries = Object.entries(tagCounts).filter(([tagName, cnt]) => {
+            const cleanKey = String(tagName).trim();
+            const master = gameState.tagMaster[cleanKey] || { minCards: 2 };
+            return cnt >= master.minCards;
+        });
+
+        const slotsHTML = [];
+
+        activeEntries.forEach(([tagName, cnt]) => {
+            const cleanKey = String(tagName).trim();
+            const master = gameState.tagMaster[cleanKey] || { category: "GEN", rank: "C", mult1: 1.0, mult2: 1.2, mult3: 1.5 };
+            const config = CATEGORY_CONFIG[master.category] || CATEGORY_CONFIG.GEN;
+
+            let multiplier = 1.0;
+            if (cnt === 1) multiplier = master.mult1;
+            else if (cnt === 2) multiplier = master.mult2;
+            else if (cnt >= 3) multiplier = master.mult3;
+
+            if (master.category === 'GEN' || master.category === 'SUP') {
+                baseMultSum *= multiplier;
+            } else if (master.category === 'ATK') {
+                atkMultSum *= multiplier;
+            } else if (master.category === 'DEF') {
+                defMultSum *= multiplier;
+            }
+
+            const glowClass = cnt >= 3 ? 'tag-glow-3 border-amber-300' : 'tag-glow-2 border-amber-500';
+
+            slotsHTML.push(`
+                <div class="flex items-center justify-between gap-1 px-2 py-0.5 rounded-lg border ${config.color} ${glowClass} text-xs sm:text-sm font-bold shadow-sm h-6 leading-tight">
+                    <div class="flex items-center gap-1 min-w-0 truncate">
+                        <i class="fa-solid ${config.icon} text-xs flex-shrink-0"></i>
+                        <span class="truncate">${cleanKey}(${master.rank})</span>
                     </div>
-                `;
-            }).join('');
+                    <div class="flex items-center gap-1 font-mono flex-shrink-0">
+                        <span class="bg-black/60 px-1 rounded text-[10px] sm:text-xs text-amber-300">${cnt}枚</span>
+                        <span class="text-yellow-300 font-black text-xs sm:text-sm">×${multiplier}</span>
+                    </div>
+                </div>
+            `);
+        });
+
+        while (slotsHTML.length < 8) {
+            slotsHTML.push(`
+                <div class="flex items-center justify-center rounded-lg border border-slate-800/40 bg-slate-950/20 h-6">
+                </div>
+            `);
         }
+
+        const overflowClass = activeEntries.length > 8 ? "overflow-y-auto" : "overflow-hidden";
+        tagsEl.className = `grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] ${overflowClass} content-start`;
+        tagsEl.innerHTML = slotsHTML.join('');
+    }
+
+    const basePowerSum = selectedCards.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
+    const pokerMult = pokerInfo.multiplier;
+
+    const totalAtk = count > 0 ? Math.round(basePowerSum * baseMultSum * atkMultSum * pokerMult) : 0;
+    const totalDef = count > 0 ? Math.round(basePowerSum * baseMultSum * defMultSum * pokerMult) : 0;
+
+    if (atkEl) atkEl.innerText = totalAtk.toLocaleString();
+    if (defEl) defEl.innerText = totalDef.toLocaleString();
+}
+
+// ★ main.js 準拠: じゃんけん型特定ロジック
+function getJankenHandType(cards) {
+    if (!cards || cards.length !== 3) return 'none';
+    const counts = { gu: 0, cho: 0, pa: 0 };
+    cards.forEach(c => { if (counts[c.janken] !== undefined) counts[c.janken]++; });
+
+    if (counts.gu === 3) return 'gu';
+    if (counts.cho === 3) return 'cho';
+    if (counts.pa === 3) return 'pa';
+    if (counts.gu === 1 && counts.cho === 1 && counts.pa === 1) return 'all';
+    
+    if (counts.gu === 2) return 'gu';
+    if (counts.cho === 2) return 'cho';
+    if (counts.pa === 2) return 'pa';
+
+    return 'none';
+}
+
+// ★ main.js 準拠: じゃんけん勝敗判定＆補正倍率算出
+function getJankenMultipliers(playerHandType, cpuHandType) {
+    if (playerHandType === cpuHandType) {
+        return { playerMult: 1.0, cpuMult: 1.0, resultText: "引き分け" };
+    }
+
+    if (playerHandType === 'all' && cpuHandType !== 'all') {
+        return { playerMult: 1.0, cpuMult: 1.2, resultText: "CPU手あり優位" };
+    }
+    if (playerHandType !== 'all' && cpuHandType === 'all') {
+        return { playerMult: 1.2, cpuMult: 1.0, resultText: "自軍手あり優位" };
+    }
+
+    const winMap = { gu: 'cho', cho: 'pa', pa: 'gu' };
+    if (winMap[playerHandType] === cpuHandType) {
+        return { playerMult: 1.2, cpuMult: 0.8, resultText: "自軍の勝ち！" };
+    } else {
+        return { playerMult: 0.8, cpuMult: 1.2, resultText: "CPUの勝ち！" };
     }
 }
 
-function evaluateSide(cards, tagMaster) {
-    if (!cards || cards.length === 0) {
-        return { basePowerSum: 0, pokerInfo: { name: '役なし', multiplier: 1.0 }, activeTags: [], atkMult: 1.0, defMult: 1.0, finalAtk: 0, finalDef: 0, jankenSummary: '-' };
-    }
-
+// ★ main.js 準拠: 片側の特性タグ＆中間ステータス評価
+function evaluateSideStatus(cards, tagMaster) {
     const basePowerSum = cards.reduce((sum, c) => sum + (parseInt(c.power, 10) || 0), 0);
     const pokerInfo = getPokerHandInfo(cards);
 
-    const jankenIcons = cards.map(c => {
-        if (c.janken === 'gu') return '✊';
-        if (c.janken === 'cho') return '✌️';
-        if (c.janken === 'pa') return '✋';
-        return '❓';
-    }).join(' ');
-
     const tagCounts = {};
-    const tagCardIndexes = {};
-
-    cards.forEach((c, cardIdx) => {
-        const tList = Array.isArray(c.tags) ? c.tags : (c.tags ? String(c.tags).split(',') : []);
-        tList.forEach(rawTag => {
-            const cleanTag = String(rawTag).replace(/[\(（].*?[\)）]/, '').trim();
-            if (!cleanTag) return;
-            tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1;
-            if (!tagCardIndexes[cleanTag]) tagCardIndexes[cleanTag] = [];
-            tagCardIndexes[cleanTag].push(cardIdx);
-        });
+    cards.forEach(c => {
+        if (Array.isArray(c.tags)) {
+            c.tags.forEach(t => {
+                const rawName = (typeof t === 'object' ? (t.name || t.label) : String(t)).replace(/[\(（].*?[\)）]/, '').trim();
+                if (rawName) tagCounts[rawName] = (tagCounts[rawName] || 0) + 1;
+            });
+        }
     });
 
-    const activeTags = [];
+    let genSupMult = 1.0;
     let atkMult = 1.0;
     let defMult = 1.0;
+    let debMultToEnemy = 1.0;
+    const activeTags = [];
+    const tagDetails = [];
 
-    Object.keys(tagCounts).forEach(tagName => {
-        const count = tagCounts[tagName];
-        const master = tagMaster[tagName];
-        if (master) {
-            const min = master.minCards || 1;
-            if (count >= min) {
-                let m = 1.0;
-                if (count === 1) m = master.mult1;
-                else if (count === 2) m = master.mult2;
-                else if (count >= 3) m = master.mult3;
+    Object.entries(tagCounts).forEach(([tagName, cnt]) => {
+        const master = tagMaster[tagName] || { category: "GEN", minCards: 2, mult1: 1.0, mult2: 1.2, mult3: 1.5 };
+        if (cnt >= master.minCards) {
+            let mult = 1.0;
+            if (cnt === 1) mult = master.mult1;
+            else if (cnt === 2) mult = master.mult2;
+            else if (cnt >= 3) mult = master.mult3;
 
-                activeTags.push({
-                    name: tagName,
-                    category: master.category,
-                    rank: master.rank,
-                    mult: m,
-                    cardIndexes: tagCardIndexes[tagName] || []
-                });
+            activeTags.push(`${tagName}(x${mult})`);
+            tagDetails.push({ name: tagName, category: master.category || "GEN", mult });
 
-                if (master.category === 'ATK') atkMult *= m;
-                if (master.category === 'DEF') defMult *= m;
-                if (master.category === 'GEN' || master.category === 'SUP') {
-                    atkMult *= m;
-                    defMult *= m;
-                }
+            if (master.category === 'GEN' || master.category === 'SUP') {
+                genSupMult *= mult;
+            } else if (master.category === 'ATK') {
+                atkMult *= mult;
+            } else if (master.category === 'DEF') {
+                defMult *= mult;
+            } else if (master.category === 'DEB') {
+                debMultToEnemy *= mult;
             }
         }
     });
 
-    const finalAtk = Math.round(basePowerSum * atkMult * pokerInfo.multiplier);
-    const finalDef = Math.round(basePowerSum * defMult * pokerInfo.multiplier);
-
     return {
         basePowerSum,
         pokerInfo,
-        activeTags,
+        pokerMult: pokerInfo.multiplier,
+        genSupMult,
         atkMult,
         defMult,
-        finalAtk,
-        finalDef,
-        jankenSummary: jankenIcons
+        debMultToEnemy,
+        activeTags,
+        tagDetails,
+        handType: getJankenHandType(cards)
     };
 }
 
-function calculateBattleResultFull(playerCards, cpuCards, tagMaster) {
-    const pEval = evaluateSide(playerCards, tagMaster);
-    const cEval = evaluateSide(cpuCards, tagMaster);
+// ★ main.js 準拠: 両軍完全対戦結果計算エンジン
+function calculateBattleResult(playerCards, cpuCards, tagMaster) {
+    const playerStat = evaluateSideStatus(playerCards, tagMaster);
+    const cpuStat = evaluateSideStatus(cpuCards, tagMaster);
 
-    const getJankenCounts = (cards) => {
-        const counts = { gu: 0, cho: 0, pa: 0 };
-        cards.forEach(c => {
-            if (c.janken && counts[c.janken] !== undefined) counts[c.janken]++;
-        });
-        return counts;
-    };
+    const jankenRes = getJankenMultipliers(playerStat.handType, cpuStat.handType);
 
-    const pJ = getJankenCounts(playerCards);
-    const cJ = getJankenCounts(cpuCards);
+    const finalPlayerAtk = Math.round(
+        playerStat.basePowerSum * playerStat.genSupMult * playerStat.atkMult * playerStat.pokerMult * jankenRes.playerMult * cpuStat.debMultToEnemy
+    );
+    const finalPlayerDef = Math.round(
+        playerStat.basePowerSum * playerStat.genSupMult * playerStat.defMult * playerStat.pokerMult * jankenRes.playerMult * cpuStat.debMultToEnemy
+    );
 
-    let pWins = 0;
-    let cWins = 0;
+    const finalCpuAtk = Math.round(
+        cpuStat.basePowerSum * cpuStat.genSupMult * cpuStat.atkMult * cpuStat.pokerMult * jankenRes.cpuMult * playerStat.debMultToEnemy
+    );
+    const finalCpuDef = Math.round(
+        cpuStat.basePowerSum * cpuStat.genSupMult * cpuStat.defMult * cpuStat.pokerMult * jankenRes.cpuMult * playerStat.debMultToEnemy
+    );
 
-    const types = ['gu', 'cho', 'pa'];
-    const winsAgainst = { gu: 'cho', cho: 'pa', pa: 'gu' };
-
-    types.forEach(t1 => {
-        const target = winsAgainst[t1];
-        const score = Math.min(pJ[t1], cJ[target]);
-        pWins += score;
-    });
-
-    types.forEach(t2 => {
-        const target = winsAgainst[t2];
-        const score = Math.min(cJ[t2], pJ[target]);
-        cWins += score;
-    });
-
-    let jankenResultText = "引き分け";
-    let pJankenMult = 1.0;
-    let cJankenMult = 1.0;
-
-    if (pWins > cWins) {
-        jankenResultText = "自軍勝利 (+20%補正)";
-        pJankenMult = 1.2;
-        cJankenMult = 0.8;
-    } else if (cWins > pWins) {
-        jankenResultText = "敵軍勝利 (敵+20%補正)";
-        pJankenMult = 0.8;
-        cJankenMult = 1.2;
-    }
-
-    // デバフ適用
-    let pDebuffMult = 1.0;
-    pEval.activeTags.filter(t => t.category === 'DEB').forEach(t => pDebuffMult *= t.mult);
-
-    let cDebuffMult = 1.0;
-    cEval.activeTags.filter(t => t.category === 'DEB').forEach(t => cDebuffMult *= t.mult);
-
-    const pFinalAtk = Math.round(pEval.finalAtk * pJankenMult * cDebuffMult);
-    const pFinalDef = Math.round(pEval.finalDef * pJankenMult * cDebuffMult);
-
-    const cFinalAtk = Math.round(cEval.finalAtk * cJankenMult * pDebuffMult);
-    const cFinalDef = Math.round(cEval.finalDef * cJankenMult * pDebuffMult);
-
-    const damageToCpu = Math.max(0, pFinalAtk - cFinalDef);
-    const damageToPlayer = Math.max(0, cFinalAtk - pFinalDef);
+    const damageToCpu = Math.max(0, finalPlayerAtk - finalCpuDef);
+    const damageToPlayer = Math.max(0, finalCpuAtk - finalPlayerDef);
 
     return {
-        jankenResultText,
+        jankenResultText: jankenRes.resultText,
         player: {
-            basePowerSum: pEval.basePowerSum,
-            pokerInfo: pEval.pokerInfo,
-            pokerMult: pEval.pokerInfo.multiplier,
-            activeTags: pEval.activeTags,
-            atkMult: pEval.atkMult,
-            defMult: pEval.defMult,
-            jankenMult: pJankenMult,
-            finalAtk: pFinalAtk,
-            finalDef: pFinalDef,
+            ...playerStat,
+            jankenMult: jankenRes.playerMult,
+            finalAtk: finalPlayerAtk,
+            finalDef: finalPlayerDef,
             damageGiven: damageToCpu
         },
         cpu: {
-            basePowerSum: cEval.basePowerSum,
-            pokerInfo: cEval.pokerInfo,
-            pokerMult: cEval.pokerInfo.multiplier,
-            activeTags: cEval.activeTags,
-            atkMult: cEval.atkMult,
-            defMult: cEval.defMult,
-            jankenMult: cJankenMult,
-            finalAtk: cFinalAtk,
-            finalDef: cFinalDef,
+            ...cpuStat,
+            jankenMult: jankenRes.cpuMult,
+            finalAtk: finalCpuAtk,
+            finalDef: finalCpuDef,
             damageGiven: damageToPlayer
         }
     };
@@ -949,11 +1400,21 @@ function triggerTurnCutin(turnNumber, callback) {
         return;
     }
 
-    textEl.innerText = `第${turnNumber}陣 開始！`;
+    let turnText = '';
+    if (turnNumber === 1) turnText = '第１陣 開始！';
+    else if (turnNumber === 2) turnText = '第２陣 開始！';
+    else if (turnNumber === 3) turnText = '第３陣 開始！';
+    else if (turnNumber === 4) turnText = '第４陣 開始！';
+    else if (turnNumber >= 5) turnText = '最終決戦 開始！';
+    else turnText = `第${turnNumber}陣 開始！`;
+
+    textEl.innerText = turnText;
     overlay.classList.remove('hidden');
 
     requestAnimationFrame(() => {
-        setTimeout(() => overlay.classList.add('active'), 20);
+        setTimeout(() => {
+            overlay.classList.add('active');
+        }, 20);
     });
 
     setTimeout(() => {
