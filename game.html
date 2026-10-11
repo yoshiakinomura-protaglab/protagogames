@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英傑陣形伝 - 完全動作版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #0b0f19;
+            color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-2 sm:p-4">
+
+    <div id="start-overlay" class="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center cursor-pointer transition-opacity duration-700">
+        <div class="text-center space-y-4 animate-pulse">
+            <h2 class="text-2xl sm:text-3xl font-bold text-amber-400 font-yuji tracking-widest">
+                英傑陣形伝
+            </h2>
+            <p class="text-sm sm:text-base text-slate-300 font-mono">
+                - CLICK TO START -
+            </p>
+        </div>
+    </div>
+
+    <!-- BGM音声タグ -->
+    <audio id="bgm-title" src="audio/title_bgm.mp3" loop preload="auto"></audio>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+    const startOverlay = document.getElementById('start-overlay');
+    const bgm = document.getElementById('bgm-title');
+
+    if (bgm) bgm.volume = 0.4; // 音量調整（40%）
+
+    if (startOverlay) {
+        startOverlay.addEventListener('click', (e) => {
+            // ページ遷移などを防ぐ
+            e.preventDefault();
+
+            // 1. ユーザー操作の瞬間にBGMを再生
+            if (bgm) {
+                bgm.play().catch(err => {
+                    console.log("BGM再生失敗:", err);
+                });
+            }
+
+            // 2. 黒背景（CLICK TO START）だけをフェードアウトして消す（ページ遷移はしない！）
+            startOverlay.classList.add('opacity-0', 'pointer-events-none');
+            
+            setTimeout(() => {
+                startOverlay.style.display = 'none';
+            }, 700);
+        });
+    }
+});
+    </script>
+
+    
+    <!-- 1. ヘッダーナビゲーション -->
+    <header class="bg-slate-900 border-b border-slate-800 p-3 rounded-xl flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-2">
+            <span class="text-xl">🎴</span>
+            <h1 class="font-black text-amber-400 text-sm sm:text-base">英傑陣形伝</h1>
+        </div>
+
+        <!-- タブ切り替えボタン -->
+        <div class="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+            <button id="tab-btn-battle" onclick="switchTab('battle')" class="px-3 py-1.5 font-bold rounded-md bg-amber-500 text-slate-950 transition-all">
+                ⚔️ 合戦
+            </button>
+            <button id="tab-btn-deck" onclick="switchTab('deck')" class="px-3 py-1.5 font-bold rounded-md text-slate-400 hover:text-slate-200 transition-all">
+                🎴 編成
+            </button>
+        </div>
+    </header>
+
+    <!-- 2. メインコンテンツエリア -->
+    <main class="my-3 flex-1">
+        
+        <!-- A. 合戦（バトル）画面 -->
+        <section id="panel-battle" class="space-y-3">
+            
+            <!-- リアルタイム戦力解析ヘッダー -->
+            <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
+                <div>
+                    <span class="text-[10px] text-slate-400 block">現在のターン</span>
+                    <span id="turn-display" class="font-bold text-amber-400 text-sm">第 1 / 5 ターン</span>
+                </div>
+                <div>
+                    <button id="clash-btn" onclick="handleClashExecute()" disabled 
+                            class="px-5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black rounded-xl text-xs opacity-50 cursor-not-allowed shadow-lg transition-all">
+                        3枚選択せよ！ (0/3)
+                    </button>
+                </div>
+            </div>
+
+            <!-- 手札カード一覧表示エリア -->
+            <div class="bg-slate-950/60 border border-slate-800 p-3 rounded-xl space-y-2">
+                <div class="flex justify-between items-center text-xs">
+                    <span id="hand-count-label" class="font-bold text-amber-300">あなたの手札 (読み込み中...)</span>
+                    <span id="deck-remain-label" class="text-slate-400 font-mono text-[11px]">自軍山札残り: 0枚</span>
+                </div>
+
+                <!-- 手札のグリッドコンテナ -->
+                <div id="player-hand" class="grid grid-cols-3 sm:grid-cols-5 gap-2 min-h-[160px]">
+                    <div class="col-span-full text-center text-slate-500 text-xs py-8">カードデータを読み込んでいます...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- B. 軍団編成画面 -->
+        <section id="panel-deck" class="hidden space-y-3">
+            <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl space-y-3">
+                <h3 class="font-bold text-amber-400 text-sm border-b border-slate-800 pb-2">🎴 デッキ編成 (最大20枚)</h3>
+                <div id="deck-cards-container" class="grid grid-cols-3 sm:grid-cols-5 gap-2 min-h-[120px]"></div>
+
+                <h3 class="font-bold text-slate-300 text-sm border-b border-slate-800 pb-2 pt-2">📦 控え英傑一覧</h3>
+                <div id="storage-cards-container" class="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-[300px] overflow-y-auto"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 3. VS激突カットインモーダル -->
+    <div id="clash-modal" class="hidden fixed inset-0 z-50 bg-black/90 flex flex-col justify-between p-6 backdrop-blur-md">
+        <div class="text-center font-bold text-amber-400 text-xl border-b border-amber-500/50 pb-2">⚔️ 陣形激突 ⚔️</div>
+        <div class="flex justify-between items-center my-auto gap-2 sm:gap-4">
+            <div id="clash-player-cards" class="grid grid-cols-3 gap-1 sm:gap-2 flex-1"></div>
+            <div class="text-xl sm:text-3xl font-black text-rose-500 italic px-2">VS</div>
+            <div id="clash-enemy-cards" class="grid grid-cols-3 gap-1 sm:gap-2 flex-1"></div>
+        </div>
+        <div class="text-center text-xs text-slate-400">リアルタイム解析中...</div>
+    </div>
+
+    <!-- 4. JSスクリプト読み込み -->
+    <script type="module">
+        import { loadGameDataFromCSV } from './csvLoader.js';
+
+        // ゲーム状態
+        let allCards = [];
+        let playerCards = [];
+        let deckCards = [];
+        let handCards = [];
+        let selectedCardIds = [];
+        let currentTurn = 1;
+
+        const rankNumMap = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, 'JOKER': 99 };
+
+        // アプリ起動時の自動初期化
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log("🎮 初期化処理開始...");
+            const data = await loadGameDataFromCSV();
+
+            if (data && data.cardsDb && data.cardsDb.length > 0) {
+                allCards = data.cardsDb;
+                playerCards = [...allCards];
+                deckCards = playerCards.slice(0, Math.min(20, playerCards.length));
+                handCards = deckCards.slice(0, 5);
+
+                renderHand();
+                renderDeck();
+                updateClashButton();
+            } else {
+                alert("cards.csv の読み込みに失敗しました。");
+            }
+        });
+
+        // 単体カードHTMLの生成（画像対応版）
+        function createCardHTML(card, isSelected = false) {
+            const jankenMap = {
+                gu: { label: 'グー ✊', color: 'text-rose-300 bg-rose-950/80 border-rose-500' },
+                cho: { label: 'チョキ ✌️', color: 'text-amber-300 bg-amber-950/80 border-amber-500' },
+                pa: { label: 'パー ✋', color: 'text-emerald-300 bg-emerald-950/80 border-emerald-500' }
+            };
+            const jInfo = jankenMap[card.janken] || { label: '未定', color: 'text-slate-400 bg-slate-900 border-slate-700' };
+            const imgSrc = `images/${card.imageIllust || card.id + '_illust.jpg'}`;
+
+            const tagsHTML = card.tags && card.tags.length > 0
+                ? card.tags.slice(0, 4).map(t => `<span class="text-[8px] bg-slate-950/80 border border-slate-700 text-slate-200 px-1 py-0.5 rounded truncate font-mono">${t}</span>`).join('')
+                : '<span class="text-[8px] text-slate-600 italic">タグなし</span>';
+
+            return `
+            <div onclick="window.toggleCardSelect('${card.id}')" 
+                 class="relative w-full aspect-[1/1.55] bg-slate-900 border-2 ${isSelected ? 'border-amber-400 ring-2 ring-amber-400/50 scale-105' : 'border-amber-500/80 hover:border-amber-400'} rounded-xl p-1.5 flex flex-col justify-between shadow-xl transition-all duration-200 select-none cursor-pointer overflow-hidden">
+                
+                <div class="flex justify-between items-center h-5 pointer-events-none">
+                    <span class="font-bold text-xs bg-slate-950 border border-amber-500/60 px-1.5 py-0.5 rounded text-amber-300 font-mono">${card.rank}</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded border ${jInfo.color} font-bold">${jInfo.label}</span>
+                </div>
+
+                <div class="relative w-full h-24 my-1 rounded-lg overflow-hidden border border-slate-700/80 bg-slate-950 pointer-events-none">
+                    <img src="${imgSrc}" alt="${card.name}" class="w-full h-full object-cover object-center" onerror="this.onerror=null; this.src='images/default.jpg';">
+                    <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent p-1 pt-2 text-center">
+                        <h4 class="font-bold text-xs text-slate-100 truncate">${card.name}</h4>
+                        <span class="text-[9px] font-mono text-amber-300 block">有名度 ${card.power || 0}</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-0.5 w-full h-[36px] content-start overflow-hidden pointer-events-none">
+                    ${tagsHTML}
+                </div>
+            </div>`;
+        }
+
+        // 手札の描画
+        function renderHand() {
+            const container = document.getElementById('player-hand');
+            if (!container) return;
+
+            document.getElementById('hand-count-label').innerText = `あなたの手札 (${handCards.length}枚)`;
+            document.getElementById('deck-remain-label').innerText = `自軍山札残り: ${Math.max(0, deckCards.length - handCards.length)}枚`;
+
+            if (handCards.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center text-slate-500 text-xs py-8">手札がありません</div>`;
+                return;
+            }
+
+            container.innerHTML = handCards.map(card => {
+                const isSelected = selectedCardIds.includes(card.id);
+                return createCardHTML(card, isSelected);
+            }).join('');
+        }
+
+        // 編成画面の描画
+        function renderDeck() {
+            const deckContainer = document.getElementById('deck-cards-container');
+            const storageContainer = document.getElementById('storage-cards-container');
+
+            if (deckContainer) {
+                deckContainer.innerHTML = deckCards.map(card => createCardHTML(card, false)).join('');
+            }
+            if (storageContainer) {
+                storageContainer.innerHTML = playerCards.map(card => createCardHTML(card, false)).join('');
+            }
+        }
+
+        // カード選択トグル
+        window.toggleCardSelect = function(cardId) {
+            const idx = selectedCardIds.indexOf(cardId);
+            if (idx >= 0) {
+                selectedCardIds.splice(idx, 1);
+            } else {
+                if (selectedCardIds.length < 3) {
+                    selectedCardIds.push(cardId);
+                } else {
+                    return;
+                }
+            }
+            renderHand();
+            updateClashButton();
+        };
+
+        // ボタン表示更新
+        function updateClashButton() {
+            const btn = document.getElementById('clash-btn');
+            const count = selectedCardIds.length;
+            btn.innerText = `${count}/3枚選択中 - 陣形出撃！`;
+
+            if (count === 3) {
+                btn.disabled = false;
+                btn.className = "px-5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black rounded-xl text-xs shadow-lg hover:brightness-110 cursor-pointer transition-all";
+            } else {
+                btn.disabled = true;
+                btn.className = "px-5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black rounded-xl text-xs opacity-50 cursor-not-allowed transition-all";
+            }
+        }
+
+        // 陣形出撃実行（激突カットイン演出）
+        window.handleClashExecute = function() {
+            if (selectedCardIds.length !== 3) return;
+
+            const pCards = handCards.filter(c => selectedCardIds.includes(c.id));
+            const eCards = allCards.filter(c => !selectedCardIds.includes(c.id)).sort(() => 0.5 - Math.random()).slice(0, 3);
+
+            const modal = document.getElementById('clash-modal');
+            document.getElementById('clash-player-cards').innerHTML = pCards.map(c => createCardHTML(c, false)).join('');
+            document.getElementById('clash-enemy-cards').innerHTML = eCards.map(c => createCardHTML(c, false)).join('');
+
+            modal.classList.remove('hidden');
+
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                
+                // 手札消費と補充
+                handCards = handCards.filter(c => !selectedCardIds.includes(c.id));
+                selectedCardIds = [];
+
+                const remainingDeck = deckCards.filter(c => !handCards.includes(c));
+                handCards.push(...remainingDeck.slice(0, 3));
+
+                currentTurn++;
+                document.getElementById('turn-display').innerText = `第 ${currentTurn} / 5 ターン`;
+
+                renderHand();
+                updateClashButton();
+            }, 2200);
+        };
+
+        // タブ切替
+        window.switchTab = function(tab) {
+            const bPanel = document.getElementById('panel-battle');
+            const dPanel = document.getElementById('panel-deck');
+            const bBtn = document.getElementById('tab-btn-battle');
+            const dBtn = document.getElementById('tab-btn-deck');
+
+            if (tab === 'battle') {
+                bPanel.classList.remove('hidden');
+                dPanel.classList.add('hidden');
+                bBtn.className = "px-3 py-1.5 font-bold rounded-md bg-amber-500 text-slate-950 transition-all";
+                dBtn.className = "px-3 py-1.5 font-bold rounded-md text-slate-400 hover:text-slate-200 transition-all";
+            } else {
+                bPanel.classList.add('hidden');
+                dPanel.classList.remove('hidden');
+                dBtn.className = "px-3 py-1.5 font-bold rounded-md bg-amber-500 text-slate-950 transition-all";
+                bBtn.className = "px-3 py-1.5 font-bold rounded-md text-slate-400 hover:text-slate-200 transition-all";
+                renderDeck();
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日本史カードバトル：英傑陣形伝</title>
+    <!-- Tailwind CSS (安定版 v3 CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Yuji Boku & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Yuji+Boku&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="battle-animation.css">
+    <script>
+        (async () => {
+            try {
+                const res = await fetch('./battle-animation.js');
+                const text = await res.text();
+                const blob = new Blob([text], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                const script = document.createElement('script');
+                script.src = blobUrl;
+                document.head.appendChild(script);
+            } catch (e) {
+                console.error("battle-animation.js のロードに失敗:", e);
+            }
+        })();
+    </script>
+
+    <style>
+        /* 画面全体を固定しつつ、中央のメイン枠だけを縦に合わせてフィットさせる */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at 50% 20%, #1a162b 0%, #0d0b14 60%, #05040a 100%);
+            color: #f1f5f9;
+            user-select: none;
+            -webkit-user-select: none;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* 画面の高さが低いディスプレイ（ノートPC等）での自動スケーリング調整 */
+        @media (max-height: 800px) {
+            main {
+                /* body全体ではなく、ゲームメインエリアだけを90%サイズに縮小配置 */
+                transform: scale(0.92);
+                transform-origin: center top;
+                height: 108% !important; /* スケール縮小分の高さを補填 */
+            }
+        }
+
+        .font-yuji { font-family: 'Yuji Boku', serif; }
+        .gold-text {
+            background: linear-gradient(135deg, #fff7ed 0%, #fef08a 25%, #eab308 60%, #ca8a04 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .card-container { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .card-container:hover {
+            transform: translateY(-2px) scale(1.04);
+            border-color: #fef08a !important;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.9), 0 0 35px rgba(245, 158, 11, 0.6) !important;
+            z-index: 10;
+        }
+
+        @keyframes selectedBluePulse {
+            0%, 100% {
+                box-shadow: 0 0 15px rgba(34, 211, 238, 0.9), 0 0 30px rgba(59, 130, 246, 0.8);
+                border-color: #38bdf8;
+            }
+            50% {
+                box-shadow: 0 0 25px rgba(56, 189, 248, 1), 0 0 45px rgba(14, 165, 233, 0.9);
+                border-color: #7dd3fc;
+            }
+        }
+        .card-selected-style {
+            animation: selectedBluePulse 1.5s infinite ease-in-out;
+            transform: translateY(-2px) scale(1.02);
+            z-index: 5;
+        }
+
+        @keyframes softGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.4); border-color: #f59e0b; }
+            50% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.8); border-color: #fef08a; }
+        }
+        .tag-glow-2 { animation: softGlow 2s infinite ease-in-out; }
+
+        @keyframes intenseGlow {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(245, 158, 11, 0.8); border-color: #fef08a; }
+            50% { transform: scale(1.04); box-shadow: 0 0 20px rgba(239, 68, 68, 1), 0 0 35px rgba(251, 191, 36, 1); border-color: #ffffff; }
+        }
+        .tag-glow-3 { animation: intenseGlow 0.6s infinite ease-in-out; }
+
+        /* 金色の粒子ボケ（Gold Bokeh Particle） */
+        .gold-particle {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(254, 240, 138, 0.9) 0%, rgba(234, 179, 8, 0.6) 50%, rgba(202, 138, 4, 0) 100%);
+            pointer-events: none;
+            animation: floatParticle 2.5s infinite ease-in-out;
+        }
+
+        @keyframes floatParticle {
+            0%, 100% {
+                transform: translateY(0) scale(0.8);
+                opacity: 0.3;
+            }
+            50% {
+                transform: translateY(-6px) scale(1.2);
+                opacity: 0.95;
+            }
+        }
+
+        /* 危険度：中（ほのかな黄色点滅） */
+        @keyframes dangerYellowGlow {
+            0%, 100% { border-color: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+            50% { border-color: #fef08a; box-shadow: 0 0 18px rgba(254, 240, 138, 0.8); }
+        }
+        .danger-mid-glow { animation: dangerYellowGlow 2s infinite ease-in-out; }
+
+        /* 危険度：大（ほのかな赤色点滅） */
+        @keyframes dangerRedGlow {
+            0%, 100% { border-color: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+            50% { border-color: #fca5a5; box-shadow: 0 0 20px rgba(239, 68, 68, 0.9); }
+        }
+        .danger-high-glow { animation: dangerRedGlow 1.5s infinite ease-in-out; }
+
+        /* 危険度：特大（拡大干渉防止・赤白点滅のみ） */
+        @keyframes dangerExtremeGlow {
+            0%, 100% { border-color: #dc2626; box-shadow: 0 0 12px rgba(220, 38, 38, 0.9), 0 0 25px rgba(239, 68, 68, 0.8); }
+            50% { border-color: #ffffff; box-shadow: 0 0 25px rgba(239, 68, 68, 1), 0 0 40px rgba(255, 255, 255, 0.9); }
+        }
+        .danger-extreme-glow {
+            animation: dangerExtremeGlow 0.6s infinite ease-in-out;
+        }
+
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between overflow-hidden text-slate-100 select-none">
+
+<!-- ★ BGM再生用タップ有効化オーバーレイ（透過度0%・完全遮光版） -->
+    <div id="battle-start-audio-overlay" class="fixed inset-0 z-[999999] bg-slate-950 flex flex-col items-center justify-center cursor-pointer transition-opacity duration-500">
+        <div class="text-center space-y-3 animate-pulse">
+            <div class="text-amber-400 font-yuji text-2xl font-bold">合戦準備完了</div>
+            <div class="text-slate-300 font-mono text-sm">- 画面をタップして開戦 -</div>
+        </div>
+    </div>
+
+
+    <!-- HEADER（メインエリア max-w-7xl と幅・位置を完全同期） -->
+    <header class="w-full bg-slate-950/80 border-b border-slate-800">
+        <div class="max-w-7xl w-full mx-auto px-2 py-2.5 relative flex items-center justify-between">
+            
+    <!-- 左側：タイトルロゴバナー（合成モードで黒背景を自然に透過＆馴染ませ） -->
+        <div class="flex items-center min-w-[240px] max-w-[280px] sm:max-w-[360px] h-full">
+            <img src="images/titlebanner.jpg" alt="大和の縁 〜あやふだかぞえ〜" class="w-full h-auto max-h-12 sm:max-h-16 object-contain block select-none mix-blend-screen">
+        </div>
+
+            <!-- 中央：カード選択中ボタン（高さ1.5倍・文字サイズ拡大） -->
+            <div class="absolute left-1/2 -translate-x-1/2 w-full max-w-[260px] text-center z-10">
+            <button id="btn-battle-start" disabled class="w-full py-2.5 sm:py-3 px-5 rounded-xl text-sm sm:text-base font-black bg-slate-900/90 text-slate-400 border border-slate-800 opacity-70 cursor-not-allowed">                    カード選択中 (0/3)
+                </button>
+            </div>
+
+            <!-- 右側：合戦進行 ＋ イラスト切替ボタン（サイズ＆フォント拡大） -->
+            <div class="flex items-center gap-3">
+                <!-- 合戦進行＋ターン数 -->
+                <div class="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold text-amber-300">
+                    <span>合戦進行</span>
+                    <span id="current-turn-num" class="font-mono text-sm sm:text-base text-yellow-300">1/5</span>
+                    <span class="text-xs text-slate-400">ターン</span>
+                </div>
+
+                <!-- イラスト切り替えボタン -->
+                <button id="btn-toggle-img-mode" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-amber-500 text-xs sm:text-sm text-slate-300 transition-all cursor-pointer">
+                    <i class="fa-solid fa-image text-amber-400 text-sm"></i>
+                    <span id="img-mode-label">イラスト</span>
+                </button>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- MAIN AREA -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-1 flex flex-col justify-between overflow-hidden gap-0.5">
+        
+        <section id="tab-battle" class="w-full flex flex-col justify-start gap-1 overflow-hidden">
+            
+            <!-- 上段：対峙エリア（flex-1を削除し、計算機の必要高さでピタッと固定） -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-1 w-full h-auto overflow-hidden">
+                
+                <!-- 敵情報エリア（自軍計算機エリアの高さにぴったり自動追従） -->
+                <div class="bg-slate-950/90 p-1.5 rounded-2xl border border-red-900/60 shadow-xl flex flex-col justify-between h-full overflow-hidden">
+                    
+                    <!-- HPバーヘッダー -->
+                    <div class="flex-shrink-0">
+                        <div class="flex justify-between items-center mb-0.5">
+                            <span class="text-s font-bold text-red-500 font-yuji flex items-center gap-1.5">
+                                <i class="fa-solid fa-skull"></i> 敵軍
+                            </span>
+                            <span id="cpu-hp-text" class="font-mono font-black text-s text-red-300">10,000 / 10,000</span>
+                        </div>
+                        <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                            <div id="cpu-hp-bar" class="h-full rounded-full bg-gradient-to-r from-orange-500 via-red-500 to-rose-600 transition-all duration-500 shadow" style="width: 100%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- メイン対峙エリア -->
+                    <div class="grid grid-cols-12 gap-1.5 flex-1 min-h-0 my-0.5 items-stretch overflow-hidden">
+                        
+                        <!-- ① 武将画像：計算機エリアの底辺までピッタリ縦に伸縮 -->
+                        <div class="col-span-4 flex items-center justify-center h-full overflow-hidden">
+                            <div class="w-full h-full bg-slate-900 rounded-xl border-2 border-red-900/80 overflow-hidden shadow-2xl flex items-center justify-center">
+                                <img id="cpu-joker-img" src="images/default.jpg" class="w-full h-full object-cover object-top" onerror="this.onerror=null; this.src='images/default.jpg';">
+                            </div>
+                        </div>
+
+                        <!-- 右側：総大将ボックス ＆ じゃんけん枠 -->
+                        <div class="col-span-8 flex flex-col justify-between h-full py-0">
+                            
+                            <!-- ② 「敵軍総大将」ボックス（危険度演出用IDを追加） -->
+                            <div id="cpu-joker-box" class="bg-slate-900/80 border border-slate-800 rounded-xl p-1.5 text-center flex flex-col justify-center flex-1 mb-1 shadow-inner min-h-0 transition-all duration-300">
+                                <span class="text-xs font-normal text-red-500 font-yuji tracking-widest block leading-tight">
+                                    敵軍総大将
+                                </span>
+                                <h3 id="cpu-joker-name" class="text-2xl sm:text-3xl font-normal text-yellow-400 font-yuji tracking-wider mt-0.5 truncate">
+                                    ---
+                                </h3>
+                                <!-- ★ 追加：危険度表示エリア -->
+                                <div id="cpu-danger-level" class="text-xs font-bold mt-0.5 transition-all">
+                                    危険度：小
+                                </div>
+                            </div>
+
+                            <!-- じゃんけん残り枚数ボックス（固定高） -->
+                            <div class="bg-slate-950/90 border border-slate-800/90 rounded-xl p-1 shadow-md flex-shrink-0">
+                                <div class="grid grid-cols-3 gap-1 text-center">
+                                    <div class="bg-rose-950/80 border-2 border-rose-600/80 py-1 px-0.5 rounded-xl flex flex-col justify-center shadow-lg">
+                                        <span class="text-xs text-rose-300 font-bold block tracking-wider">✊ グー</span>
+                                        <span id="cpu-deck-gu" class="font-mono font-black text-sm sm:text-base text-white block">0枚</span>
+                                    </div>
+                                    <div class="bg-amber-950/80 border-2 border-amber-600/80 py-1 px-0.5 rounded-xl flex flex-col justify-center shadow-lg">
+                                        <span class="text-xs text-amber-300 font-bold block tracking-wider">✌️ チョキ</span>
+                                        <span id="cpu-deck-cho" class="font-mono font-black text-sm sm:text-base text-white block">0枚</span>
+                                    </div>
+                                    <div class="bg-emerald-950/80 border-2 border-emerald-600/80 py-1 px-0.5 rounded-xl flex flex-col justify-center shadow-lg">
+                                        <span class="text-xs text-emerald-300 font-bold block tracking-wider">✋ パー</span>
+                                        <span id="cpu-deck-pa" class="font-mono font-black text-sm sm:text-base text-white block">0枚</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="flex-shrink-0">
+                        <div id="cpu-field-slots" class="grid grid-cols-3 gap-1.5"></div>
+                    </div>
+                </div>
+
+                <!-- 自軍計算機エリア（h-auto で予測ATK,DEF下の余白を完全排除） -->
+                <div class="bg-slate-950/90 p-1.5 rounded-2xl border border-amber-600/50 shadow-xl flex flex-col justify-start gap-1 h-auto overflow-hidden">
+                    
+                    <!-- HPバーヘッダー -->
+                    <div class="flex-shrink-0">
+                        <div class="flex justify-between items-center mb-0.5">
+                            <span class="text-s font-bold text-emerald-400 font-yuji flex items-center gap-1.5">
+                                <i class="fa-solid fa-shield-cat"></i> 自軍
+                            </span>
+                            <span id="player-hp-text" class="font-mono font-black text-s text-emerald-300">10,000 / 10,000</span>
+                        </div>
+                        <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                            <div id="player-hp-bar" class="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-500 to-green-400 transition-all duration-500 shadow" style="width: 100%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- 計算機メイン枠（予測ATK/DEF下でピッタリ終わるコンパクト構造） -->
+                    <div class="bg-slate-900/90 p-1 rounded-xl border border-amber-500/40 flex flex-col justify-start gap-1 overflow-hidden">
+                        
+                        <!-- じゃんけん ＆ トランプ役 -->
+                        <div class="grid grid-cols-2 gap-1 border-b border-slate-800/80 pb-0.5 flex-shrink-0">
+                            <div class="bg-slate-950/90 p-0.5 rounded-lg border border-slate-800 flex flex-col items-center justify-center h-[28px]">
+                                <div id="calc-janken-icons" class="w-full text-center font-bold text-xs sm:text-sm text-amber-300">-</div>
+                            </div>
+
+                            <div class="bg-slate-950/90 p-0.5 rounded-lg border border-slate-800 text-center flex flex-col items-center justify-center h-[28px]">
+                                <div id="calc-poker-ranks" class="text-xs font-mono font-bold text-amber-300 leading-none">- - -</div>
+                            </div>
+                        </div>
+
+                    <!-- 発動特性タグ（上下にゆとりを持たせた高さ拡張枠） -->
+                    <div class="flex-shrink-0 my-1">
+                        <div id="calc-active-tags" class="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] overflow-hidden content-start">
+                        </div>
+                    </div>
+
+                        <!-- 文字肉厚化SVGフィルター（画面非表示で定義） -->
+<svg style="position: absolute; width: 0; height: 0; overflow: hidden;" aria-hidden="true">
+  <filter id="bolden-atk">
+    <!-- 赤文字の肉厚化 -->
+    <feMorphology operator="dilate" radius="1.2" in="SourceAlpha" result="thicker" />
+    <feFlood flood-color="#e11d48" result="color" />
+    <feComposite in="color" in2="thicker" operator="in" result="boldText" />
+    <feMerge>
+      <feMergeNode in="boldText" />
+      <feMergeNode in="SourceGraphic" />
+    </feMerge>
+  </filter>
+  <filter id="bolden-def">
+    <!-- 青文字の肉厚化 -->
+    <feMorphology operator="dilate" radius="1.2" in="SourceAlpha" result="thicker" />
+    <feFlood flood-color="#0284c7" result="color" />
+    <feComposite in="color" in2="thicker" operator="in" result="boldText" />
+    <feMerge>
+      <feMergeNode in="boldText" />
+      <feMergeNode in="SourceGraphic" />
+    </feMerge>
+  </filter>
+</svg>
+
+<!-- 予測 ATK ＆ DEF（最下部） -->
+<div class="grid grid-cols-2 gap-1 pt-0.5 border-t border-slate-800/80 flex-shrink-0">
+    <!-- 予測 ATK -->
+    <div class="text-center py-1 px-1.5 bg-gradient-to-b from-red-950/90 to-slate-950/90 border border-red-500/60 rounded-xl flex flex-col justify-center shadow-[0_0_12px_rgba(244,63,94,0.25)]">
+        <span class="text-[10px] sm:text-xs text-rose-300 font-bold block tracking-wider uppercase">予測 ⚔️ ATK</span>
+        <span id="calc-total-atk" class="atk-bold-stroke text-3xl sm:text-4xl block leading-none py-0.5">
+            0
+        </span>
+    </div>
+    <!-- 予測 DEF -->
+    <div class="text-center py-1 px-1.5 bg-gradient-to-b from-blue-950/90 to-slate-950/90 border border-sky-500/60 rounded-xl flex flex-col justify-center shadow-[0_0_12px_rgba(56,189,248,0.25)]">
+        <span class="text-[10px] sm:text-xs text-sky-300 font-bold block tracking-wider uppercase">予測 🛡️ DEF</span>
+        <span id="calc-total-def" class="def-bold-stroke text-3xl sm:text-4xl block leading-none py-0.5">
+            0
+        </span>
+    </div>
+</div>
+
+                    </div>
+
+                    <div class="flex-shrink-0">
+                        <div id="player-field-slots" class="grid grid-cols-3 gap-1.5"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 下段：手札エリア -->
+            <div class="bg-slate-900/90 p-1.5 rounded-xl border border-amber-500/40 shadow-2xl flex-shrink-0 flex flex-col justify-between min-h-0">
+                <div id="player-hand-container" class="grid grid-cols-5 gap-1.5 relative z-10 flex-1 min-h-0"></div>
+            </div>
+
+        </section>
+
+        <!-- 軍団編成 -->
+        <section id="tab-deck" class="hidden w-full h-full flex flex-col gap-3 overflow-y-auto">
+            <div class="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-yuji text-base font-bold gold-text">軍団編成 (20枚デッキ)</h2>
+                    <p class="text-[10px] text-slate-400">デッキの軸となるJOKERと英傑を選んで編成しよう</p>
+                </div>
+                <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 font-bold text-xs">
+                    デッキ枚数: <strong id="deck-current-size" class="text-amber-400">20</strong> / 20枚
+                </span>
+            </div>
+
+            <div class="bg-slate-950/80 p-3 rounded-2xl border border-amber-900/40">
+                <h3 class="text-xs font-bold text-amber-300 mb-1.5 font-yuji">編成中デッキ (タップして外す)</h3>
+                <div id="current-deck-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-1.5"></div>
+            </div>
+
+            <div class="bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
+                <h3 class="text-xs font-bold text-slate-400 mb-1.5 font-yuji">控え英傑一覧 (タップして追加)</h3>
+                <div id="collection-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-1.5"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JSモジュール（ソロ戦/P2P戦の自動読み分け対応版） -->
+    <script>
+        (async () => {
+            try {
+                // P2P対戦モードか判定
+                const isP2P = sessionStorage.getItem('isP2PMatch') === 'true';
+                const targetScript = isP2P ? './p2p_main.js' : './main.js';
+                console.log(`[Game Loader] モード: ${isP2P ? 'P2P対戦' : 'ソロプレイ'} (${targetScript})`);
+
+                const res = await fetch(targetScript);
+                const jsText = await res.text();
+                const blob = new Blob([jsText], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                await import(blobUrl);
+            } catch (e) {
+                console.error("メインJSモジュールのロードに失敗:", e);
+            }
+        })();
+    </script>
+
+    <!-- ゲーム内 出撃確認モーダル（全体大型化＆全情報ゆったり配置版） -->
+    <div id="battle-confirm-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[80] hidden select-none">
+        <!-- max-w-2xl に拡大し、縦も max-h-[92vh] まで使えるように拡張 -->
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-5 sm:p-7 max-w-2xl w-11/12 text-center shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            
+            <!-- タイトル -->
+            <h3 class="text-xl sm:text-2xl font-black text-amber-400 font-yuji border-b border-amber-500/30 pb-2.5 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-swords text-amber-500"></i> 戦闘開始確認
+            </h3>
+            <p class="text-xs sm:text-sm text-slate-300">以下の陣形で出撃（戦闘開始）しますか？</p>
+
+            <!-- ① 選択カード3枚（画像 ＋ 名前） -->
+            <div id="modal-confirm-card-list" class="grid grid-cols-3 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <!-- JSで3枚の画像＋名前を動的生成 -->
+            </div>
+
+            <!-- ② じゃんけん ｜ ポーカー役 -->
+            <div class="grid grid-cols-2 gap-3 text-xs sm:text-sm font-bold">
+                <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex items-center justify-center gap-2">
+                    <span class="text-slate-400 text-xs">じゃんけん:</span>
+                    <span id="modal-confirm-janken" class="text-amber-300 text-base font-black">-</span>
+                </div>
+                <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex items-center justify-center gap-2">
+                    <span class="text-slate-400 text-xs">ポーカー役:</span>
+                    <span id="modal-confirm-poker" class="text-yellow-300 font-yuji text-sm sm:text-base font-bold">-</span>
+                </div>
+            </div>
+
+            <!-- ③ 発動特性（h-auto で高さ制限を撤廃して全部収める） -->
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="text-xs sm:text-sm font-bold text-slate-400 mb-2 text-left flex items-center gap-1.5">
+                    <i class="fa-solid fa-tags text-amber-400"></i> 発動特性
+                </div>
+                <!-- h-auto で 6枠が綺麗に縦に収まるよう自動調整 -->
+                <div id="modal-confirm-tags" class="grid grid-cols-2 gap-2 h-auto overflow-hidden content-start">
+                    <!-- JSで大型化した発動特性タグをセット -->
+                </div>
+            </div>
+
+            <!-- ④ 予測 ATK ｜ DEF（極太肉厚SVG＋クッキリ白フチ統一版） -->
+            <div class="grid grid-cols-2 gap-3 pt-1">
+                <div class="bg-rose-950/80 border-2 border-rose-500/80 rounded-xl py-3 px-4 flex items-center justify-between shadow-lg">
+                    <span class="text-xs sm:text-sm text-rose-300 font-bold tracking-wider">予測 ⚔️ ATK</span>
+                    <span id="modal-confirm-atk" class="atk-bold-stroke text-2xl sm:text-3xl block leading-none py-0.5 font-sans font-black">
+                        0
+                    </span>
+                </div>
+                <div class="bg-blue-950/80 border-2 border-blue-500/80 rounded-xl py-3 px-4 flex items-center justify-between shadow-lg">
+                    <span class="text-xs sm:text-sm text-blue-300 font-bold tracking-wider">予測 🛡️ DEF</span>
+                    <span id="modal-confirm-def" class="def-bold-stroke text-2xl sm:text-3xl block leading-none py-0.5 font-sans font-black">
+                        0
+                    </span>
+                </div>
+            </div>
+
+            <!-- ⑤ ボタン配置（左：はい / 右：キャンセル） -->
+            <div class="flex items-center gap-4 pt-2">
+                <button id="btn-modal-confirm" class="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-sm sm:text-base border border-amber-300 shadow-lg cursor-pointer transition-all active:scale-95">
+                    はい（戦闘開始）
+                </button>
+                <button id="btn-modal-cancel" class="flex-1 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm sm:text-base border border-slate-700 cursor-pointer transition-all active:scale-95">
+                    キャンセル
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+  <!-- 1. 戦闘演出用 ホワイトアウト専用オーバーレイ -->
+    <div id="battle-animation-overlay" class="fixed inset-0 bg-white pointer-events-none opacity-0 z-[9999] transition-opacity duration-500"></div>
+
+    <!-- 2. 合戦詳細リザルトモーダル（レシート明細風 ＆ 過去陣切替対応版） -->
+    <div id="turn-result-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[10001] hidden transition-opacity">
+        <div class="bg-slate-950 border-2 border-amber-500 rounded-2xl p-4 sm:p-5 max-w-2xl w-11/12 text-left shadow-2xl shadow-amber-950/80 max-h-[90vh] flex flex-col font-mono text-slate-200">
+            
+            <h2 class="text-xl font-black font-yuji text-center text-yellow-300 border-b border-dashed border-amber-500/60 pb-2 mb-3 flex-shrink-0">
+                合戦結果報告
+            </h2>
+
+            <!-- 左右レイアウト（左：レシート、右：陣履歴ボタン） -->
+            <div class="grid grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden">
+                
+                <!-- 【左側：10列】レシート明細（スクロール可能） -->
+                <div class="col-span-9 sm:col-span-10 overflow-y-auto pr-1.5 space-y-2">
+                    
+                    <!-- ヘッダー -->
+                    <div class="grid grid-cols-12 gap-2 text-xs border-b border-slate-800 pb-2 mb-2 font-bold text-slate-400">
+                        <div class="col-span-3">項目</div>
+                        <div class="col-span-4 text-emerald-400 text-center">自軍</div>
+                        <div class="col-span-1 text-center text-slate-600">|</div>
+                        <div class="col-span-4 text-rose-400 text-center">敵軍</div>
+                    </div>
+
+                    <!-- 参戦者画像 ＆ 名前 -->
+                    <div class="grid grid-cols-12 gap-2 items-center border-b border-slate-800/80 pb-2 mb-2 text-xs">
+                        <div class="col-span-3 font-bold text-slate-300">参戦者</div>
+                        <div id="res-p-cards" class="col-span-4 grid grid-cols-3 gap-1"></div>
+                        <div class="col-span-1 text-center text-slate-700">|</div>
+                        <div id="res-c-cards" class="col-span-4 grid grid-cols-3 gap-1"></div>
+                    </div>
+
+                    <!-- 有名度合計 -->
+                    <div class="grid grid-cols-12 gap-2 items-center border-b border-slate-800/80 py-1.5 text-xs">
+                        <div class="col-span-3 font-bold text-slate-300">有名度合計</div>
+                        <div id="res-p-power" class="col-span-4 text-center font-black text-amber-300 text-sm">0</div>
+                        <div class="col-span-1 text-center text-slate-700">|</div>
+                        <div id="res-c-power" class="col-span-4 text-center font-black text-amber-300 text-sm">0</div>
+                    </div>
+
+                    <!-- ポーカー役 -->
+                    <div class="grid grid-cols-12 gap-2 items-center border-b border-dashed border-slate-700 py-1.5 text-xs">
+                        <div class="col-span-3 font-bold text-slate-300">ポーカー役</div>
+                        <div id="res-p-poker" class="col-span-4 text-center font-bold text-yellow-300">役なし</div>
+                        <div class="col-span-1 text-center text-slate-700">|</div>
+                        <div id="res-c-poker" class="col-span-4 text-center font-bold text-yellow-300">役なし</div>
+                    </div>
+
+                    <!-- 発動特性明細（1行1特性） -->
+                    <div class="py-2 border-b border-slate-800 space-y-2 text-xs">
+                        <div class="font-bold text-amber-400 bg-slate-900/80 px-2 py-0.5 rounded border border-amber-900/40">発動特性</div>
+                        
+                        <!-- 時代/汎用特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-400 mb-0.5">【時代・汎用特性】</div>
+                            <div id="res-list-gen" class="space-y-1"></div>
+                        </div>
+
+                        <!-- 攻撃特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-rose-400 mb-0.5">【攻撃特性】</div>
+                            <div id="res-list-atk" class="space-y-1"></div>
+                        </div>
+
+                        <!-- 防御特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-blue-400 mb-0.5">【防御特性】</div>
+                            <div id="res-list-def" class="space-y-1"></div>
+                        </div>
+
+                        <!-- サポート特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-amber-300 mb-0.5">【サポート特性】</div>
+                            <div id="res-list-sup" class="space-y-1"></div>
+                        </div>
+                    </div>
+
+                    <!-- 特性適用後の数値 -->
+                    <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800 my-2 text-xs space-y-1">
+                        <div class="flex justify-between items-center text-slate-300">
+                            <span>自軍攻撃力 (特性込): <strong id="res-mid-p-atk" class="text-rose-400 font-black">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span>敵軍防御力 (特性込): <strong id="res-mid-c-def" class="text-blue-400 font-black">0</strong></span>
+                        </div>
+                        <div class="flex justify-between items-center text-slate-300">
+                            <span>自軍防御力 (特性込): <strong id="res-mid-p-def" class="text-blue-400 font-black">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span>敵軍攻撃力 (特性込): <strong id="res-mid-c-atk" class="text-rose-400 font-black">0</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- デバフ特性 -->
+                    <div class="py-2 border-b border-dashed border-purple-800/60 text-xs">
+                        <div class="text-[11px] font-bold text-purple-400 mb-1">【デバフ特性】</div>
+                        <div id="res-list-deb" class="space-y-1"></div>
+                    </div>
+
+                    <!-- じゃんけん補正 -->
+                    <div class="py-2 border-b border-slate-800 text-xs">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-slate-300">じゃんけん判定:</span>
+                            <span id="res-janken-text" class="font-black text-yellow-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">引き分け</span>
+                        </div>
+                        <div class="grid grid-cols-12 gap-2 text-center text-[11px]">
+                            <div id="res-p-janken-mult" class="col-span-5 font-bold text-emerald-300">自軍補正: x1.0</div>
+                            <div class="col-span-2 text-slate-700">|</div>
+                            <div id="res-c-janken-mult" class="col-span-5 font-bold text-rose-300">敵軍補正: x1.0</div>
+                        </div>
+                    </div>
+
+                    <!-- 最終ステータス -->
+                    <div class="bg-slate-900/90 p-2.5 rounded-xl border border-amber-500/50 my-2 text-xs space-y-1.5">
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-200">最終自軍ATK: <strong id="res-final-p-atk" class="text-rose-400 font-black text-sm">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span class="text-slate-200">最終敵軍DEF: <strong id="res-final-c-def" class="text-blue-400 font-black text-sm">0</strong></span>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-slate-800 pt-1">
+                            <span class="text-slate-200">最終自軍DEF: <strong id="res-final-p-def" class="text-blue-400 font-black text-sm">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span class="text-slate-200">最終敵軍ATK: <strong id="res-final-c-atk" class="text-rose-400 font-black text-sm">0</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 最終与ダメージ・被ダメージ -->
+                    <div class="grid grid-cols-2 gap-2 pt-1 pb-2 border-t border-dashed border-amber-500/60 text-center">
+                        <div class="bg-rose-950/80 p-2 rounded-xl border border-rose-600/80">
+                            <div class="text-[10px] text-rose-300 font-bold">敵軍へ与えたダメージ</div>
+                            <div id="res-damage-given-cpu" class="font-mono font-black text-xl text-yellow-300">0</div>
+                        </div>
+                        <div class="bg-blue-950/80 p-2 rounded-xl border border-blue-600/80">
+                            <div class="text-[10px] text-blue-300 font-bold">自軍が受けたダメージ</div>
+                            <div id="res-damage-given-player" class="font-mono font-black text-xl text-yellow-300">0</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ★【右側：2列】陣切替タブボタンエリア -->
+                <div class="col-span-3 sm:col-span-2 flex flex-col justify-start gap-1.5 border-l border-slate-800 pl-2">
+                    <div class="text-[10px] sm:text-xs font-bold text-amber-400 font-yuji text-center border-b border-slate-800 pb-1">
+                        <i class="fa-solid fa-clock-rotate-left"></i> 陣履歴
+                    </div>
+                    
+                    <!-- JSで第1陣〜最終決戦のボタンがここに出ます -->
+                    <div id="result-turn-tab-container" class="flex flex-col gap-1.5 flex-1 pt-1"></div>
+                </div>
+
+            </div>
+
+            <!-- 次へ進むボタン -->
+            <button id="btn-next-turn" class="w-full mt-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-900/50 transition-all active:scale-95 cursor-pointer flex-shrink-0">
+                次のターンへ進む ➔
+            </button>
+        </div>
+    </div>
+
+<!-- ターンスタート・カットイン演出（漆黒×黄金ライン） -->
+<div id="turn-cutin-overlay" class="fixed inset-0 flex items-center justify-center pointer-events-none hidden z-[9999]">
+    <!-- 横帯背景（黒ベース＋上下に金の細ライン） -->
+    <div id="turn-cutin-banner" class="w-full relative flex items-center justify-center py-6 sm:py-7 bg-slate-950/95 border-y-2 border-amber-400 shadow-2xl">
+        
+        <!-- 中央テキスト（完全にシンプルな純白文字＋黒影） -->
+        <h2 id="turn-cutin-text" class="relative z-10 text-3xl sm:text-5xl font-black font-yuji text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
+            第１陣 開始！
+        </h2>
+    </div>
+</div>
+
+<!-- 勝敗1枚絵カットインモーダル (1.5倍大型化 ＆ シックな黄色系統一デザイン版) -->
+<div id="game-result-cutin-modal" class="fixed inset-0 z-[10000] bg-slate-950 flex items-center justify-center hidden opacity-0 transition-opacity duration-500 select-none overflow-hidden">
+    
+    <!-- 全画面背景1枚絵 -->
+    <img id="result-cutin-img" src="" class="absolute inset-0 w-full h-full object-cover z-0" alt="勝敗カットイン">
+
+    <!-- 暗がりグラデーション（下部のボタン群を見やすくする影） -->
+    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none z-10"></div>
+
+    <!-- ★ 左下配置：1.5倍に大型化した統一デザインの3ボタン（縦並び） -->
+    <div class="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 z-20 flex flex-col gap-4 items-start">
+        
+        <!-- 1. 最終ターンのリザルト確認 -->
+        <button id="btn-cutin-to-result" 
+                style="width: 380px !important; min-width: 380px !important; height: 64px !important; min-height: 64px !important; font-size: 18px !important; background-color: rgba(15, 23, 42, 0.95) !important; color: #fcd34d !important; border: 2px solid rgba(245, 158, 11, 0.8) !important; border-radius: 16px !important; opacity: 1 !important; transform: none !important;" 
+                class="font-bold font-yuji shadow-2xl hover:brightness-125 active:scale-95 transition-all duration-200 cursor-pointer flex items-center justify-center gap-3">
+            <i class="fa-solid fa-receipt text-amber-400 text-xl"></i>
+            <span>最終ターンのリザルト確認</span>
+        </button>
+
+        <!-- 2. 再戦する -->
+        <button id="btn-cutin-restart" 
+                style="width: 380px !important; min-width: 380px !important; height: 64px !important; min-height: 64px !important; font-size: 18px !important; background-color: rgba(15, 23, 42, 0.95) !important; color: #fcd34d !important; border: 2px solid rgba(245, 158, 11, 0.8) !important; border-radius: 16px !important; opacity: 1 !important; transform: none !important;" 
+                class="font-bold font-yuji shadow-2xl hover:brightness-125 active:scale-95 transition-all duration-200 cursor-pointer flex items-center justify-center gap-3">
+            <i class="fa-solid fa-rotate-right text-amber-400 text-xl"></i>
+            <span>再戦する</span>
+        </button>
+
+        <!-- 3. タイトルに戻る -->
+        <button id="btn-cutin-title" 
+                style="width: 380px !important; min-width: 380px !important; height: 64px !important; min-height: 64px !important; font-size: 18px !important; background-color: rgba(15, 23, 42, 0.95) !important; color: #fcd34d !important; border: 2px solid rgba(245, 158, 11, 0.8) !important; border-radius: 16px !important; opacity: 1 !important; transform: none !important;" 
+                class="font-bold font-yuji shadow-2xl hover:brightness-125 active:scale-95 transition-all duration-200 cursor-pointer flex items-center justify-center gap-3">
+            <i class="fa-solid fa-house text-amber-400 text-xl"></i>
+            <span>タイトルに戻る</span>
+        </button>
+
+    </div>
+</div>
+
+<!-- P2P対戦部屋 モーダル -->
+<div id="p2p-match-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[90000] hidden select-none">
+    <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 max-w-md w-11/12 text-center shadow-2xl space-y-5 border-amber-500/60">
+        <h3 class="text-xl font-black text-amber-400 font-yuji flex items-center justify-center gap-2 border-b border-slate-800 pb-3">
+            <i class="fa-solid fa-wifi text-amber-400"></i> オンライン対戦（P2P）
+        </h3>
+
+        <!-- ① P2P初期化・自分のID表示 -->
+        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-left space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-bold">あなたの対戦ID:</span>
+                <button id="btn-p2p-init" class="bg-amber-600 hover:bg-amber-500 text-slate-950 px-3 py-1 rounded text-xs font-black transition-all">1. ID発行・接続開始</button>
+            </div>
+            <div id="p2p-my-id-display" class="font-mono text-sm text-yellow-300 font-bold break-all bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                --- 未接続 ---
+            </div>
+        </div>
+
+        <!-- ② 相手のIDを入力して接続 -->
+        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-left space-y-2">
+            <label class="text-xs text-slate-400 font-bold block">相手の対戦IDを入力して参加:</label>
+            <div class="flex gap-2">
+                <input id="p2p-target-id-input" type="text" placeholder="相手のIDを貼り付け" class="bg-slate-900 border border-slate-700 px-3 py-1.5 rounded text-xs text-slate-200 flex-1 font-mono focus:border-amber-400 outline-none">
+                <button id="btn-p2p-connect" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-xs font-bold transition-all">接続</button>
+            </div>
+        </div>
+
+        <!-- 状態・ログ出力 -->
+        <div id="p2p-modal-status-log" class="text-xs font-mono text-slate-400 bg-slate-950 p-2.5 rounded border border-slate-800 h-16 overflow-y-auto text-left leading-relaxed">
+            <div>対戦IDを発行するか、相手のIDを入力してください。</div>
+        </div>
+
+        <!-- 閉じるとゲームへ戻る -->
+        <button id="btn-p2p-close" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all">
+            閉じる
+        </button>
+    </div>
+</div>
+
+</body>
+</html>

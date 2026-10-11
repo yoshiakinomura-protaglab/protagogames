@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>デッキ編集</title>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Yuji Boku & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Yuji+Boku&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at 50% 20%, #1a162b 0%, #0d0b14 60%, #05040a 100%);
+            color: #f1f5f9;
+            user-select: none;
+            -webkit-user-select: none;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        .font-yuji { font-family: 'Yuji Boku', serif; }
+
+        /* スクロールバーのカスタマイズ */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(245, 158, 11, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-slate-950 flex flex-col justify-between p-2 sm:p-4 select-none">
+
+    <!-- 全体コンテナ（バトル画面と同じ max-w-7xl mx-auto で中央固定） -->
+    <div class="max-w-7xl w-full h-full mx-auto flex flex-col justify-between overflow-hidden gap-2">
+
+      <!-- 最上段ヘッダー -->
+<header class="flex items-center justify-between w-full pb-2 border-b border-amber-500/30 flex-shrink-0 relative">
+    <!-- ④ 画面最上段左端：デッキ編集テキスト -->
+    <h1 class="text-base sm:text-lg font-black font-yuji text-amber-400 flex items-center gap-2">
+        <i class="fa-solid fa-box-archive text-amber-500"></i> デッキ編集
+    </h1>
+
+    <!-- ⑤ 中央：デッキ名入力（絶対配置で完全センタリング） -->
+    <div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-amber-500/60 focus-within:border-amber-300 focus-within:ring-2 focus-within:ring-amber-400/50 transition-all shadow-inner">
+        <i class="fa-solid fa-pen-to-square text-amber-400 text-xs"></i>
+        <input id="deck-name-input" type="text" value="デッキ１" placeholder="デッキ名を入力" maxlength="15"
+               class="bg-transparent text-yellow-300 font-bold text-xs sm:text-sm text-center focus:outline-none w-32 sm:w-44">
+    </div>
+
+    <!-- ⑥ 右端：デッキ呼出 ＆ タイトルに戻るボタン -->
+    <div class="flex items-center gap-2">
+        <button id="btn-open-load-modal" class="px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5">
+            <i class="fa-solid fa-folder-open text-amber-400"></i> デッキ呼出
+        </button>
+        <button id="btn-back-to-title" class="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-rose-500/80 text-slate-300 hover:text-rose-400 font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5">
+            <i class="fa-solid fa-house"></i> タイトルに戻る
+        </button>
+    </div>
+</header>
+
+<!-- ⓽ 上部固定エリア：編成中カード（20枚）表示枠（縦長3:4カード2段表示） -->
+        <section class="w-full bg-slate-900/90 border border-amber-500/40 rounded-2xl p-2.5 shadow-2xl flex-shrink-0">
+            <div class="flex items-center justify-between mb-1.5 px-1">
+                <span class="text-xs font-bold text-amber-300 font-yuji flex items-center gap-1.5">
+                    <span>編成カード</span>
+                    <span id="deck-count-badge" class="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-md border border-amber-500/40 font-mono">1 / 20枚</span>
+                </span>
+                <span class="text-[10px] text-slate-400">※上部タップで枠外、下部タップで枠追加</span>
+            </div>
+
+            <!-- 横10列×縦2行の固定グリッド（高さは中の3:4カードサイズに自動追従） -->
+            <div id="slots-20-container" class="grid grid-cols-10 grid-rows-2 gap-1.5 w-full overflow-hidden">
+                <!-- JSで20個の縦長(3:4)マスを描画 -->
+            </div>
+        </section>
+
+        <!-- ⑩ 下部メインエリア：カード一覧（左） ＆ メニュー（右） -->
+        <main class="flex-1 w-full grid grid-cols-12 gap-2.5 min-h-0 overflow-hidden">
+            
+            <!-- ⑫ カード一覧エリア（左側：9カラム） -->
+            <section class="col-span-9 bg-slate-900/80 border border-slate-800 rounded-2xl p-2.5 flex flex-col justify-start gap-1.5 shadow-xl overflow-hidden min-h-0">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-1 flex-shrink-0">
+                    <span class="text-xs font-bold text-slate-300 font-yuji">所持カード一覧</span>
+                    <span id="collection-count" class="text-[10px] text-slate-400 font-mono">0枚表示</span>
+                </div>
+
+                <!-- JOKER枠と一般カード枠を1つの大きな縦スクロールエリア内にまとめる -->
+                <div class="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
+                    
+                    <!-- 1. 所持JOKERエリア（先頭行） -->
+                    <div class="bg-slate-950/60 border border-amber-500/30 rounded-xl p-2 space-y-1">
+                        <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1">
+                            <i class="fa-solid fa-crown text-xs"></i> 所持JOKER（総大将）
+                        </div>
+                        <div id="joker-collection-grid" class="grid grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 gap-1.5">
+                            <!-- JSでJOKERカードを描画 -->
+                        </div>
+                    </div>
+
+                    <!-- 2. 所持一般カードエリア（下段） -->
+                    <div class="space-y-1">
+                        <div class="text-[10px] font-bold text-slate-400 flex items-center gap-1 pt-0.5">
+                            <i class="fa-solid fa-users text-xs"></i> 配下英傑（一般カード）
+                        </div>
+                        <div id="normal-collection-grid" class="grid grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 gap-1.5 content-start">
+                            <!-- JSで一般カードを描画 -->
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+<!-- ⑪ メニューエリア（右側：3カラム） -->
+<aside class="col-span-3 bg-slate-900/80 border border-slate-800 rounded-2xl p-2.5 flex flex-col justify-between shadow-xl">
+    <div class="space-y-2.5">
+        <h2 class="text-xs font-bold text-amber-400 font-yuji border-b border-slate-800 pb-1 flex items-center gap-1.5">
+            <i class="fa-solid fa-filter"></i> カード絞り込み
+        </h2>
+
+        <!-- モーダルを開く大型ボタン -->
+        <button id="btn-open-tag-modal" class="w-full py-2.5 px-3 rounded-xl bg-slate-950 border border-amber-500/70 hover:border-amber-400 text-amber-300 font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-between group">
+            <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-tags text-amber-400 group-hover:scale-110 transition-transform"></i>
+                <span>条件を指定して絞り込む</span>
+            </span>
+            <span id="tag-filter-count-badge" class="bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full shadow hidden">0</span>
+        </button>
+
+        <!-- ★ 絞り込みボタンの直下：絞り込み中の条件エリア -->
+        <div id="active-tag-filter-box" class="hidden bg-slate-950/90 border border-amber-500/40 rounded-xl p-2 text-xs">
+            <div class="flex items-center justify-between mb-1.5 border-b border-slate-800 pb-1 text-[10px] font-bold text-amber-400">
+                <span><i class="fa-solid fa-filter text-[9px]"></i> 適用中の条件 (AND検索)</span>
+                <button id="btn-clear-tag-filter" class="text-slate-400 hover:text-rose-400 text-[10px] cursor-pointer">全解除</button>
+            </div>
+            <!-- バッジ表示（通常3個、縦スクロールで最大6個分表示） -->
+            <div id="active-tag-filter-list" class="flex flex-col gap-1 max-h-36 overflow-y-auto pr-0.5">
+                <!-- JSで動的生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 右下エリア：特性チェックボタン ＆ 大型保存ボタン ＆ タイトルバナー -->
+    <div class="w-full pt-2 border-t border-slate-800/80 space-y-2">
+        <button id="btn-check-traits" class="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/60 hover:border-amber-400 text-amber-300 font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> デッキの特性チェック
+        </button>
+
+        <button id="btn-save-deck" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 active:scale-95 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-950/60 border border-amber-300 transition-all cursor-pointer flex items-center justify-center gap-2">
+            <i class="fa-solid fa-floppy-disk text-base"></i> デッキを保存する
+        </button>
+
+        <div class="w-full flex justify-center items-center">
+            <img src="images/titlebanner.jpg" alt="タイトルバナー" class="w-full max-h-9 object-contain block select-none mix-blend-screen opacity-80">
+        </div>
+    </div>
+</aside>
+
+        </main>
+
+    </div>
+
+<!-- Modal 1: デッキ呼出 Modal -->
+    <div id="modal-deck-load" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 max-w-lg w-11/12 text-center shadow-2xl relative flex flex-col max-h-[85vh]">
+            <h3 class="text-lg sm:text-xl font-black text-amber-400 font-yuji mb-3 border-b border-amber-500/30 pb-2 flex items-center justify-center gap-2 flex-shrink-0">
+                <i class="fa-solid fa-folder-open text-amber-500"></i> デッキ呼出 (10枠)
+            </h3>
+            
+            <!-- リストコンテナ（見やすさ重視で余白拡張） -->
+            <div id="deck-list-container" class="space-y-2.5 overflow-y-auto my-2 pr-1.5 flex-1">
+                <!-- JSで10個のリストを生成 -->
+            </div>
+
+            <button id="btn-close-load-modal" class="w-full py-2.5 mt-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-700 transition-all cursor-pointer flex-shrink-0">
+                閉じる
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal 2: タイトルに戻る確認 Modal -->
+    <div id="modal-confirm-back" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 max-w-xs w-11/12 text-center shadow-2xl">
+            <h3 class="text-sm font-bold text-slate-200 mb-3">
+                タイトルに戻りますか？
+            </h3>
+            <p class="text-[11px] text-slate-400 mb-4">保存していない編集内容は失われます。</p>
+            <div class="flex gap-3">
+                <button id="btn-back-confirm" class="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 text-slate-950 font-black text-xs cursor-pointer">
+                    はい
+                </button>
+                <button id="btn-back-cancel" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 cursor-pointer">
+                    いいえ
+                </button>
+            </div>
+        </div>
+    </div>
+
+<!-- Modal 3: カード詳細 Modal (幅広＆レイアウト最適化版) -->
+    <div id="modal-card-detail" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 hidden transition-opacity">
+        <!-- max-w-2xl に拡張して全体サイズを拡大 -->
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 max-w-2xl w-11/12 shadow-2xl relative flex flex-col gap-4">
+            <button id="btn-close-detail-modal" class="absolute top-3.5 right-3.5 text-slate-400 hover:text-white text-xl z-10 cursor-pointer transition-transform hover:scale-110">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <!-- カード画像 ＆ 右側ステータス情報 -->
+            <div class="grid grid-cols-12 gap-4 items-start">
+                <!-- 左側：カード画像 -->
+                <div class="col-span-5 sm:col-span-4 aspect-[3/4] rounded-xl border-2 border-amber-500/60 overflow-hidden bg-slate-950 relative shadow-xl flex-shrink-0">
+                    <img id="detail-card-img" src="images/default.jpg" class="w-full h-full object-cover object-top">
+                    <button id="btn-detail-toggle-img" class="absolute bottom-1.5 right-1.5 bg-slate-950/90 border border-amber-400 text-amber-300 text-[10px] px-2 py-0.5 rounded-md font-bold cursor-pointer hover:scale-105 shadow-md">
+                        資料へ
+                    </button>
+                </div>
+
+                <!-- 右側：ステータス詳細エリア -->
+                <div class="col-span-7 sm:col-span-8 space-y-2.5 text-left flex flex-col justify-between">
+                    
+                    <!-- ① 名前 (ポーカー手バッジ削除) -->
+                    <div class="border-b border-slate-800 pb-1.5">
+                        <h3 id="detail-card-name" class="text-xl sm:text-2xl font-black text-yellow-300 font-yuji leading-tight tracking-wide">
+                            田油津媛
+                        </h3>
+                    </div>
+
+                    <!-- ② 有名度 (名前と同等サイズ: text-xl sm:text-2xl) -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs sm:text-sm font-bold text-slate-400">有名度:</span>
+                        <span id="detail-card-famous" class="text-xl sm:text-2xl font-black font-sans text-amber-300 tracking-wider gold-text">
+                            300
+                        </span>
+                    </div>
+
+                    <!-- ③ じゃんけん ＆ ポーカー手 (大型バッジデザイン) -->
+                    <div class="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-800/90 shadow-inner">
+                        <div id="detail-card-janken" class="flex items-center">
+                            <!-- JS側で大型バッジを生成 -->
+                        </div>
+                        <span class="text-slate-700 text-sm font-bold">|</span>
+                        <div id="detail-card-poker" class="flex items-center">
+                            <!-- JS側で大型バッジを生成 -->
+                        </div>
+                    </div>
+
+                    <!-- ④ 特性タグ (横2 × 縦3 の最大6個グリッド) -->
+                    <div class="space-y-1">
+                        <span class="text-xs font-bold text-slate-400 block">特性タグ:</span>
+                        <div id="detail-card-tags" class="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-0.5">
+                            <!-- JS側で2列表示を動的生成 -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ⑤ 人物列伝 (幅広＋3〜4行ゆったり表示枠) -->
+            <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 text-left shadow-inner">
+                <div class="text-xs font-bold text-amber-400 font-yuji mb-1 flex items-center gap-1.5">
+                    <i class="fa-solid fa-scroll text-amber-500"></i> 人物列伝
+                </div>
+                <p id="detail-card-retsuden" class="text-xs text-slate-300 leading-relaxed min-h-[60px] max-h-32 overflow-y-auto">
+                    列伝データを読み込み中...
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSモジュール（ポータブル安全読み込み） -->
+    <script>
+        (async () => {
+            try {
+                const res = await fetch('./deck_edit.js');
+                const jsText = await res.text();
+                const blob = new Blob([jsText], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                await import(blobUrl);
+            } catch (e) {
+                console.error("deck_edit.js のロードに失敗:", e);
+            }
+        })();
+    </script>
+ 
+    <!-- Modal 4: 特性チェック Modal -->
+    <div id="modal-traits-check" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 max-w-md w-11/12 shadow-2xl relative flex flex-col max-h-[85vh]">
+            <h3 class="text-lg font-black text-amber-400 font-yuji mb-3 border-b border-amber-500/30 pb-2 text-center flex items-center justify-center gap-2 flex-shrink-0">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> ★編成中の特性★
+            </h3>
+
+            <!-- 特性一覧表示領域 -->
+            <div id="traits-list-container" class="space-y-3 overflow-y-auto my-2 pr-1.5 flex-1 text-left">
+                <!-- JSで動的生成 -->
+            </div>
+
+            <button id="btn-close-traits-modal" class="w-full py-2.5 mt-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-all cursor-pointer flex-shrink-0">
+                閉じる
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal 5: 全タグ絞り込み選択 Modal (時代GEN含む) -->
+    <div id="modal-tag-filter" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 hidden transition-opacity">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 max-w-3xl w-11/12 shadow-2xl relative flex flex-col max-h-[85vh]">
+            <button id="btn-close-tag-modal" class="absolute top-3.5 right-3.5 text-slate-400 hover:text-white text-xl z-10 cursor-pointer">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <h3 class="text-lg font-black text-amber-400 font-yuji mb-3 border-b border-amber-500/30 pb-2 text-center flex items-center justify-center gap-2 flex-shrink-0">
+                <i class="fa-solid fa-filter text-amber-400"></i> 絞り込み条件の選択 (複数指定はAND検索)
+            </h3>
+
+            <!-- タグ一覧リスト（GEN ➔ ATK ➔ SUP ➔ DEF ➔ DEB 順 ＆ ランク順） -->
+            <div id="modal-tag-grid-container" class="space-y-3 overflow-y-auto my-2 pr-1.5 flex-1 text-left">
+                <!-- JSで動的生成 -->
+            </div>
+
+            <!-- 下部ボタンエリア -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800 flex-shrink-0 gap-3">
+                <button id="btn-reset-modal-tags" class="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 cursor-pointer">
+                    選択をクリア
+                </button>
+                <button id="btn-apply-tag-filter" class="py-2.5 px-6 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 text-slate-950 font-black text-xs sm:text-sm border border-amber-300 shadow-lg cursor-pointer hover:scale-105 active:scale-95 transition-all">
+                    <i class="fa-solid fa-filter mr-1"></i> 絞り込み実行
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ゲーム内 トースト通知ポップアップ -->
+    <div id="toast" class="fixed top-12 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 border border-amber-500/80 px-5 py-2 rounded-xl shadow-2xl flex items-center gap-2 transform -translate-y-[100px] opacity-0 transition-all duration-300 pointer-events-none">
+        <i class="fa-solid fa-circle-check text-amber-400 text-sm"></i>
+        <span id="toast-msg" class="text-xs sm:text-sm font-bold text-slate-100">通知メッセージ</span>
+    </div>
+
+</body>
+</html>
