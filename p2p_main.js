@@ -422,7 +422,9 @@ function setupEventListeners() {
     }
 
     const btnConfirmDeck = document.getElementById('btn-p2p-confirm-deck');
-    if (btnConfirmDeck) btnConfirmDeck.onclick = handleConfirmDeckSelection;
+    if (btnConfirmDeck) {
+        btnConfirmDeck.onclick = () => { handleConfirmDeckSelection(); };
+    }
 
     const btnRematchSame = document.getElementById('btn-p2p-rematch-same');
     if (btnRematchSame) btnRematchSame.onclick = handleRematchSameDeck;
