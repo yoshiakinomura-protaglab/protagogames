@@ -2,152 +2,288 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カードゲーム - 対戦部屋選択</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>通信対戦（P2P）- 英傑陣形伝</title>
+    <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="p2p_network.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Yuji+Boku&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="battle-animation.css">
+
     <style>
         body {
-            background-color: #1a1a1a;
-            color: #ffffff;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at 50% 20%, #1a162b 0%, #0d0b14 60%, #05040a 100%);
+            color: #f1f5f9;
+            user-select: none;
+            -webkit-user-select: none;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
         }
-        .container {
-            background: #2a2a2a;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            width: 360px;
-            text-align: center;
-        }
-        h1 { margin-bottom: 20px; font-size: 22px; }
-        .room-list { display: flex; flex-direction: column; gap: 12px; }
-        .room-card {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #333;
-            padding: 12px 16px;
-            border-radius: 8px;
-        }
-        .room-name { font-weight: bold; font-size: 16px; }
-        .status-badge { font-size: 14px; font-weight: bold; }
-        .status-empty { color: #aaa; }
-        .status-waiting { color: #4dff88; }
-        .status-full { color: #ff4d4d; }
-        button.join-btn {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        button.join-btn:disabled {
-            background: #555;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        .loading-text { font-size: 12px; color: #888; margin-top: 15px; }
+        .font-yuji { font-family: 'Yuji Boku', serif; }
     </style>
 </head>
-<body>
 
-<div class="container" id="room-select-screen">
-    <h1>対戦部屋を選択</h1>
-    <div class="room-list">
-        <!-- 部屋 1〜5 -->
-        <script>
-            for (let i = 1; i <= 5; i++) {
-                document.write(`
-                    <div class="room-card">
-                        <div>
-                            <span class="room-name">部屋 ${i}</span>
-                            <div id="status-${i}" class="status-badge status-empty">確認中...</div>
-                        </div>
-                        <button id="btn-${i}" class="join-btn" onclick="selectRoom(${i})">入る</button>
-                    </div>
-                `);
-            }
-        </script>
+<body class="h-screen w-screen flex flex-col justify-between overflow-hidden text-slate-100 select-none">
+
+    <!-- ================= ==========================================
+         ① ルーム選択 ＆ 接続状態 画面 (初期表示)
+         ========================================================== -->
+    <div id="p2p-room-select-screen" class="fixed inset-0 z-[80000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 max-w-md w-full text-center shadow-2xl space-y-5 border-amber-500/60">
+            <h1 class="text-xl sm:text-2xl font-black text-amber-400 font-yuji border-b border-slate-800 pb-3 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-wifi text-amber-400"></i> 対戦部屋を選択
+            </h1>
+
+            <div class="space-y-2.5 my-4">
+                <script>
+                    for (let i = 1; i <= 5; i++) {
+                        document.write(`
+                            <div class="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
+                                <div class="text-left">
+                                    <span class="font-bold text-sm text-slate-200">対戦部屋 ${i}</span>
+                                    <div id="p2p-room-status-${i}" class="text-xs text-slate-500 font-mono">確認中...</div>
+                                </div>
+                                <button id="btn-join-room-${i}" onclick="window.selectP2PRoom(${i})" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs px-4 py-2 rounded-lg transition-all cursor-pointer">
+                                    入る
+                                </button>
+                            </div>
+                        `);
+                    }
+                </script>
+            </div>
+
+            <button onclick="window.location.href='title.html'" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all cursor-pointer">
+                タイトルに戻る
+            </button>
+        </div>
     </div>
-    <div class="loading-text" id="reload-info">5秒毎に状態を自動更新中</div>
-</div>
 
-<!-- 待機中画面 -->
-<div class="container" id="waiting-screen" style="display: none;">
-    <h2>対戦相手を待っています...</h2>
-    <p style="color: #aaa;">もう1人がこの部屋を選択すると自動でゲームが始まります。</p>
-    <div style="margin-top: 20px; font-size: 24px;">⏳</div>
-</div>
+    <!-- ================= ==========================================
+         ② デッキ選択 Modal（部屋接続成功後に自動表示）
+         ========================================================== -->
+    <div id="p2p-deck-select-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[85000] hidden select-none">
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 max-w-md w-11/12 text-center shadow-2xl space-y-4">
+            <h3 class="text-lg font-black text-amber-400 font-yuji border-b border-slate-800 pb-2 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-box-archive text-amber-500"></i> 出撃デッキ選択
+            </h3>
 
-<script>
-    // パスワード保護（既存機能の維持）
-    (function checkAuth() {
-        if (sessionStorage.getItem('p2p_authenticated') !== 'true') {
-            const pass = prompt("スタッフ認証パスワードを入力してください:");
-            if (pass === "yamato2026") { // ★パスワード
-                sessionStorage.setItem('p2p_authenticated', 'true');
-            } else {
-                alert("パスワードが違います");
-                document.body.innerHTML = "<h1 style='text-align:center;margin-top:20%;'>アクセス制限</h1>";
-                window.stop();
-            }
-        }
-    })();
+            <div class="text-left space-y-1">
+                <label class="text-xs text-slate-400 font-bold">20枚完成デッキを選択してください:</label>
+                <select id="p2p-deck-dropdown" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-yellow-300 font-bold outline-none focus:border-amber-400">
+                </select>
+            </div>
 
-    // 部屋の状態を自動更新する関数
-    async function refreshRoomStatuses() {
-        for (let i = 1; i <= 5; i++) {
-            const statusEl = document.getElementById(`status-${i}`);
-            const btnEl = document.getElementById(`btn-${i}`);
+            <button id="btn-p2p-confirm-deck" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-sm border border-amber-300 shadow-lg cursor-pointer transition-all active:scale-95">
+                準備完了（決定）
+            </button>
+        </div>
+    </div>
 
-            const status = await P2PNetwork.checkRoomStatus(i);
+    <!-- ================= ==========================================
+         相手待機中 オーバーレイ
+         ========================================================== -->
+    <div id="p2p-waiting-opponent-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center z-[86000] hidden select-none">
+        <div class="text-center space-y-4 p-6">
+            <div class="text-3xl animate-bounce">⏳</div>
+            <div id="p2p-waiting-text" class="text-amber-300 font-yuji text-xl font-bold">相手のデッキ選択を待っています...</div>
+            <p class="text-xs text-slate-400 font-mono">お互いに準備が完了すると自動で戦闘が開始します。</p>
+        </div>
+    </div>
 
-            if (status === 'FULL') {
-                statusEl.textContent = "🔴 対戦中 (2/2)";
-                statusEl.className = "status-badge status-full";
-                btnEl.disabled = true;
-            } else if (status === 'WAITING') {
-                statusEl.textContent = "🟢 待機中 (1/2)";
-                statusEl.className = "status-badge status-waiting";
-                btnEl.disabled = false;
-            } else {
-                statusEl.textContent = "⚪ 空き (0/2)";
-                statusEl.className = "status-badge status-empty";
-                btnEl.disabled = false;
-            }
-        }
-    }
+    <!-- ================= ==========================================
+         バトル本体 UI 描画コンテナ (`p2p_main.js` から完全制御)
+         ========================================================== -->
+    <header class="w-full bg-slate-950/80 border-b border-slate-800">
+        <div class="max-w-7xl w-full mx-auto px-2 py-2.5 relative flex items-center justify-between">
+            <div class="flex items-center min-w-[240px] max-w-[280px] sm:max-w-[360px] h-full">
+                <img src="images/titlebanner.jpg" alt="大和の縁" class="w-full h-auto max-h-12 sm:max-h-16 object-contain block select-none mix-blend-screen">
+            </div>
+            <div class="absolute left-1/2 -translate-x-1/2 w-full max-w-[260px] text-center z-10">
+                <button id="btn-battle-start" disabled class="w-full py-2.5 sm:py-3 px-5 rounded-xl text-sm sm:text-base font-black bg-slate-900/90 text-slate-400 border border-slate-800 opacity-70 cursor-not-allowed">
+                    カード選択中 (0/3)
+                </button>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold text-amber-300">
+                    <span>合戦進行</span>
+                    <span id="current-turn-num" class="font-mono text-sm sm:text-base text-yellow-300">1/5</span>
+                    <span class="text-xs text-slate-400">ターン</span>
+                </div>
+                <button id="btn-toggle-img-mode" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-amber-500 text-xs sm:text-sm text-slate-300 transition-all cursor-pointer">
+                    <i class="fa-solid fa-image text-amber-400 text-sm"></i>
+                    <span id="img-mode-label">イラスト</span>
+                </button>
+            </div>
+        </div>
+    </header>
 
-    // 部屋ボタンを押した時の処理
-    function selectRoom(roomNumber) {
-        document.getElementById('room-select-screen').style.display = 'none';
-        document.getElementById('waiting-screen').style.display = 'block';
+    <main class="flex-1 max-w-7xl w-full mx-auto p-1 flex flex-col justify-between overflow-hidden gap-0.5">
+        <section id="tab-battle" class="w-full flex flex-col justify-start gap-1 overflow-hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-1 w-full h-auto overflow-hidden">
+                <div class="bg-slate-950/90 p-1.5 rounded-2xl border border-red-900/60 shadow-xl flex flex-col justify-between h-full overflow-hidden">
+                    <div class="flex-shrink-0">
+                        <div class="flex justify-between items-center mb-0.5">
+                            <span class="text-s font-bold text-red-500 font-yuji flex items-center gap-1.5">
+                                <i class="fa-solid fa-skull"></i> 敵軍 (対戦相手)
+                            </span>
+                            <span id="cpu-hp-text" class="font-mono font-black text-s text-red-300">10,000 / 10,000</span>
+                        </div>
+                        <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                            <div id="cpu-hp-bar" class="h-full rounded-full bg-gradient-to-r from-orange-500 via-red-500 to-rose-600 transition-all duration-500 shadow" style="width: 100%;"></div>
+                        </div>
+                    </div>
 
-        // P2P通信の準備
-        p2p.onConnected((isHost) => {
-            console.log("接続成功！ゲーム画面へ遷移します。");
-            // ゲーム用HTML（game.html）へ遷移するか、メイン描画処理を開始
-            window.location.href = `game.html?room=${roomNumber}&host=${isHost}`;
-        });
+                    <div class="grid grid-cols-12 gap-1.5 flex-1 min-h-0 my-0.5 items-stretch overflow-hidden">
+                        <div class="col-span-4 flex items-center justify-center h-full overflow-hidden">
+                            <div class="w-full h-full bg-slate-900 rounded-xl border-2 border-red-900/80 overflow-hidden shadow-2xl flex items-center justify-center">
+                                <img id="cpu-joker-img" src="images/default.jpg" class="w-full h-full object-cover object-top aspect-[3/4]">
+                            </div>
+                        </div>
+                        <div class="col-span-8 flex flex-col justify-between h-full py-0">
+                            <div id="cpu-joker-box" class="bg-slate-900/80 border border-slate-800 rounded-xl p-1.5 text-center flex flex-col justify-center flex-1 mb-1 shadow-inner min-h-0 transition-all duration-300">
+                                <span class="text-xs font-normal text-red-500 font-yuji tracking-widest block leading-tight">敵軍総大将</span>
+                                <h3 id="cpu-joker-name" class="text-2xl sm:text-3xl font-normal text-yellow-400 font-yuji tracking-wider mt-0.5 truncate">---</h3>
+                                <div id="cpu-danger-level" class="text-xs font-bold mt-0.5 transition-all">危険度：小</div>
+                            </div>
+                            <div class="bg-slate-950/90 border border-slate-800/90 rounded-xl p-1 shadow-md flex-shrink-0">
+                                <div class="grid grid-cols-3 gap-1 text-center">
+                                    <div class="bg-rose-950/80 border-2 border-rose-600/80 py-1 px-0.5 rounded-xl flex flex-col justify-center shadow-lg">
+                                        <span class="text-xs text-rose-300 font-bold block tracking-wider">✊ グー</span>
+                                        <span id="cpu-deck-gu" class="font-mono font-black text-sm sm:text-base text-white block">0枚</span>
+                                    </div>
+                                    <div class="bg-amber-950/80 border-2 border-amber-600/80 py-1 px-0.5 rounded-xl flex flex-col justify-center shadow-lg">
+                                        <span class="text-xs text-amber-300 font-bold block tracking-wider">✌️ チョキ</span>
+                                        <span id="cpu-deck-cho" class="font-mono font-black text-sm sm:text-base text-white block">0枚</span>
+                                    </div>
+                                    <div class="bg-emerald-950/80 border-2 border-emerald-600/80 py-1 px-0.5 rounded-xl flex flex-col justify-center shadow-lg">
+                                        <span class="text-xs text-emerald-300 font-bold block tracking-wider">✋ パー</span>
+                                        <span id="cpu-deck-pa" class="font-mono font-black text-sm sm:text-base text-white block">0枚</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        p2p.enterRoom(roomNumber);
-    }
+                <div class="bg-slate-950/90 p-1.5 rounded-2xl border border-amber-600/50 shadow-xl flex flex-col justify-start gap-1 h-auto overflow-hidden">
+                    <div class="flex-shrink-0">
+                        <div class="flex justify-between items-center mb-0.5">
+                            <span class="text-s font-bold text-emerald-400 font-yuji flex items-center gap-1.5">
+                                <i class="fa-solid fa-shield-cat"></i> 自軍
+                            </span>
+                            <span id="player-hp-text" class="font-mono font-black text-s text-emerald-300">10,000 / 10,000</span>
+                        </div>
+                        <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                            <div id="player-hp-bar" class="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-500 to-green-400 transition-all duration-500 shadow" style="width: 100%;"></div>
+                        </div>
+                    </div>
 
-    // 起動時および5秒周期で自動更新
-    window.onload = () => {
-        refreshRoomStatuses();
-        setInterval(refreshRoomStatuses, 5000);
-    };
-</script>
+                    <div class="bg-slate-900/90 p-1 rounded-xl border border-amber-500/40 flex flex-col justify-start gap-1 overflow-hidden">
+                        <div class="grid grid-cols-2 gap-1 border-b border-slate-800/80 pb-0.5 flex-shrink-0">
+                            <div class="bg-slate-950/90 p-0.5 rounded-lg border border-slate-800 flex flex-col items-center justify-center h-[28px]">
+                                <div id="calc-janken-icons" class="w-full text-center font-bold text-xs sm:text-sm text-amber-300">-</div>
+                            </div>
+                            <div class="bg-slate-950/90 p-0.5 rounded-lg border border-slate-800 text-center flex flex-col items-center justify-center h-[28px]">
+                                <div id="calc-poker-ranks" class="text-xs font-mono font-bold text-amber-300 leading-none">- - -</div>
+                            </div>
+                        </div>
+
+                        <div class="flex-shrink-0 my-1">
+                            <div id="calc-active-tags" class="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] overflow-y-auto content-start"></div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-1 pt-0.5 border-t border-slate-800/80 flex-shrink-0">
+                            <div class="text-center py-1 px-1.5 bg-gradient-to-b from-red-950/90 to-slate-950/90 border border-red-500/60 rounded-xl flex flex-col justify-center">
+                                <span class="text-[10px] sm:text-xs text-rose-300 font-bold block uppercase">予測 ⚔️ ATK</span>
+                                <span id="calc-total-atk" class="atk-bold-stroke text-3xl sm:text-4xl block leading-none py-0.5">0</span>
+                            </div>
+                            <div class="text-center py-1 px-1.5 bg-gradient-to-b from-blue-950/90 to-slate-950/90 border border-sky-500/60 rounded-xl flex flex-col justify-center">
+                                <span class="text-[10px] sm:text-xs text-sky-300 font-bold block uppercase">予測 🛡️ DEF</span>
+                                <span id="calc-total-def" class="def-bold-stroke text-3xl sm:text-4xl block leading-none py-0.5">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/90 p-1.5 rounded-xl border border-amber-500/40 shadow-2xl flex-shrink-0 flex flex-col justify-between min-h-0">
+                <div id="player-hand-container" class="grid grid-cols-5 gap-1.5 relative z-10 flex-1 min-h-0"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- モーダル各種 (出撃確認 / リザルト / 勝敗カットイン) -->
+    <div id="battle-confirm-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[80] hidden select-none">
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-5 sm:p-7 max-w-2xl w-11/12 text-center shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <h3 class="text-xl sm:text-2xl font-black text-amber-400 font-yuji border-b border-amber-500/30 pb-2.5 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-swords text-amber-500"></i> 戦闘開始確認
+            </h3>
+            <div id="modal-confirm-card-list" class="grid grid-cols-3 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800"></div>
+            <div class="grid grid-cols-2 gap-3 text-xs sm:text-sm font-bold">
+                <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex items-center justify-center gap-2">
+                    <span class="text-slate-400 text-xs">じゃんけん:</span>
+                    <span id="modal-confirm-janken" class="text-amber-300 text-base font-black">-</span>
+                </div>
+                <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex items-center justify-center gap-2">
+                    <span class="text-slate-400 text-xs">ポーカー役:</span>
+                    <span id="modal-confirm-poker" class="text-yellow-300 font-yuji text-sm sm:text-base font-bold">-</span>
+                </div>
+            </div>
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div id="modal-confirm-tags" class="grid grid-cols-2 gap-2 h-auto overflow-hidden content-start"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 pt-1">
+                <div class="bg-rose-950/80 border-2 border-rose-500/80 rounded-xl py-3 px-4 flex items-center justify-between shadow-lg">
+                    <span class="text-xs sm:text-sm text-rose-300 font-bold">予測 ⚔️ ATK</span>
+                    <span id="modal-confirm-atk" class="atk-bold-stroke text-2xl sm:text-3xl font-black">0</span>
+                </div>
+                <div class="bg-blue-950/80 border-2 border-blue-500/80 rounded-xl py-3 px-4 flex items-center justify-between shadow-lg">
+                    <span class="text-xs sm:text-sm text-blue-300 font-bold">予測 🛡️ DEF</span>
+                    <span id="modal-confirm-def" class="def-bold-stroke text-2xl sm:text-3xl font-black">0</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 pt-2">
+                <button id="btn-modal-confirm" class="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 font-black text-sm sm:text-base border border-amber-300 shadow-lg cursor-pointer transition-all active:scale-95">
+                    はい（戦闘開始）
+                </button>
+                <button id="btn-modal-cancel" class="flex-1 py-3.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-sm sm:text-base border border-slate-700 cursor-pointer transition-all active:scale-95">
+                    キャンセル
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 勝敗1枚絵カットイン（⑤・⑥の「再戦」「デッキ選び直し」ボタンを完備） -->
+    <div id="game-result-cutin-modal" class="fixed inset-0 z-[10000] bg-slate-950 flex items-center justify-center hidden opacity-0 transition-opacity duration-500 select-none overflow-hidden">
+        <img id="result-cutin-img" src="" class="absolute inset-0 w-full h-full object-cover z-0">
+        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none z-10"></div>
+        <div class="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 z-20 flex flex-col gap-4 items-start">
+            <button id="btn-p2p-rematch-same" class="w-[380px] h-[64px] text-lg bg-slate-900/95 text-amber-300 border-2 border-amber-500/80 rounded-2xl font-bold font-yuji shadow-2xl hover:brightness-125 cursor-pointer flex items-center justify-center gap-3">
+                <i class="fa-solid fa-rotate-right text-amber-400 text-xl"></i>
+                <span>同じデッキで再戦</span>
+            </button>
+            <button id="btn-p2p-change-deck" class="w-[380px] h-[64px] text-lg bg-slate-900/95 text-amber-300 border-2 border-amber-500/80 rounded-2xl font-bold font-yuji shadow-2xl hover:brightness-125 cursor-pointer flex items-center justify-center gap-3">
+                <i class="fa-solid fa-box-archive text-amber-400 text-xl"></i>
+                <span>デッキを選び直す</span>
+            </button>
+            <button id="btn-cutin-title" class="w-[380px] h-[64px] text-lg bg-slate-900/95 text-slate-300 border-2 border-slate-700 rounded-2xl font-bold font-yuji shadow-2xl hover:brightness-125 cursor-pointer flex items-center justify-center gap-3">
+                <i class="fa-solid fa-house text-slate-400 text-xl"></i>
+                <span>タイトルに戻る</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- P2P通信スクリプトの直接動的発火 -->
+    <script type="module" src="p2p_main.js"></script>
 
 </body>
 </html>
