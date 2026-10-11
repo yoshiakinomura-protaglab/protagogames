@@ -1,0 +1,269 @@
+/* battle-animation.css - デバフ予約＆紫の妖気モヤモヤ（霧）演出対応版 */
+.font-yuji { font-family: 'Yuji Boku', serif; }
+.font-impact { font-family: 'Inter', -apple-system, sans-serif; font-weight: 900; }
+
+/* 武将登場アニメーション */
+@keyframes slamIn {
+    0% { transform: scale(2.5); opacity: 0; filter: blur(12px); }
+    70% { transform: scale(0.95); opacity: 1; filter: blur(0); }
+    100% { transform: scale(1); opacity: 1; }
+}
+.slam-in { animation: slamIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+/* 巨大テキスト叩きつけ（ドカン！） */
+@keyframes popSlam {
+    0% { transform: scale(2.5); opacity: 0; filter: blur(8px); }
+    60% { transform: scale(0.9); opacity: 1; filter: blur(0); }
+    100% { transform: scale(1); opacity: 1; }
+}
+.pop-slam { animation: popSlam 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+/* 画面強力シェイク（大揺れ） */
+@keyframes heavyShake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    20% { transform: translate(-14px, 10px) rotate(-1.5deg); }
+    40% { transform: translate(14px, -10px) rotate(1.5deg); }
+    60% { transform: translate(-9px, -7px) rotate(-0.8deg); }
+    80% { transform: translate(9px, 7px) rotate(0.8deg); }
+}
+.heavy-shake { animation: heavyShake 0.25s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+
+/* 最終超巨大数値の爆破フラッシュ */
+@keyframes flashGlowMega {
+    0% { filter: brightness(4) drop-shadow(0 0 60px #ffffff); transform: scale(1.4); }
+    30% { filter: brightness(1.5) drop-shadow(0 0 40px rgba(255,255,255,0.9)); transform: scale(0.92); }
+    60% { transform: scale(1.05); }
+    100% { filter: brightness(1); transform: scale(1); }
+}
+.flash-glow-mega { animation: flashGlowMega 0.5s ease-out forwards; }
+
+/* 左から右へ横切るスライドカットイン */
+@keyframes slideAcross {
+    0% { transform: translateX(-100%); opacity: 0; }
+    15% { transform: translateX(0); opacity: 1; }
+    85% { transform: translateX(0); opacity: 1; }
+    100% { transform: translateX(100%); opacity: 0; }
+}
+.slide-across { animation: slideAcross 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* -------------------------------------------------- */
+/* テキストグラデーションスタイル                      */
+/* -------------------------------------------------- */
+
+.red-glow {
+    background: linear-gradient(180deg, #ffffff 0%, #f87171 45%, #dc2626 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 12px rgba(220, 38, 38, 0.7)) drop-shadow(0 2px 4px rgba(0,0,0,0.9));
+}
+
+.blue-glow {
+    background: linear-gradient(180deg, #ffffff 0%, #60a5fa 45%, #2563eb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 12px rgba(37, 99, 235, 0.7)) drop-shadow(0 2px 4px rgba(0,0,0,0.9));
+}
+
+.gold-glow {
+    background: linear-gradient(180deg, #ffffff 0%, #fde047 40%, #ca8a04 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 12px rgba(202, 138, 4, 0.8)) drop-shadow(0 2px 4px rgba(0,0,0,0.9));
+}
+
+.purple-glow {
+    background: linear-gradient(180deg, #ffffff 0%, #c084fc 45%, #7e22ce 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 12px rgba(126, 34, 206, 0.8)) drop-shadow(0 2px 4px rgba(0,0,0,0.9));
+}
+
+.shobu-glow {
+    background: linear-gradient(180deg, #ffffff 0%, #fde047 30%, #ef4444 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 6px 20px rgba(239, 68, 68, 0.8)) drop-shadow(0 4px 8px rgba(0,0,0,0.95));
+}
+
+.atk-glow {
+    color: #fca5a5;
+    font-weight: 900;
+    filter: drop-shadow(0 0 20px rgba(239, 68, 68, 0.8)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.9));
+}
+
+.def-glow {
+    color: #93c5fd;
+    font-weight: 900;
+    filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.8)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.9));
+}
+
+.green-glow {
+    color: #86efac;
+    font-weight: 900;
+    filter: drop-shadow(0 0 15px rgba(34, 197, 94, 0.8)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.9));
+}
+
+.yellow-glow {
+    color: #fef08a;
+    font-weight: 900;
+    filter: drop-shadow(0 0 15px rgba(234, 179, 8, 0.8)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.9));
+}
+
+/* =================================================== */
+/* 4属性別 カード枠発光 ＆ 拡大（ドン！）              */
+/* =================================================== */
+
+@keyframes pulseGlow {
+    0% { transform: translateY(-6px) scale(1.06); }
+    50% { transform: translateY(-8px) scale(1.08); }
+    100% { transform: translateY(-6px) scale(1.06); }
+}
+
+.card-glow-red {
+    border-color: #f87171 !important;
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.95), 0 0 50px rgba(220, 38, 38, 0.7), inset 0 0 15px rgba(239, 68, 68, 0.5) !important;
+    animation: pulseGlow 0.8s ease-in-out infinite alternate;
+    z-index: 30 !important;
+}
+
+.card-glow-blue {
+    border-color: #60a5fa !important;
+    box-shadow: 0 0 25px rgba(59, 130, 246, 0.95), 0 0 50px rgba(37, 99, 235, 0.7), inset 0 0 15px rgba(59, 130, 246, 0.5) !important;
+    animation: pulseGlow 0.8s ease-in-out infinite alternate;
+    z-index: 30 !important;
+}
+
+.card-glow-gold {
+    border-color: #fde047 !important;
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.95), 0 0 50px rgba(217, 119, 6, 0.7), inset 0 0 15px rgba(245, 158, 11, 0.5) !important;
+    animation: pulseGlow 0.8s ease-in-out infinite alternate;
+    z-index: 30 !important;
+}
+
+.card-glow-purple {
+    border-color: #c084fc !important;
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.95), 0 0 50px rgba(147, 51, 234, 0.7), inset 0 0 15px rgba(168, 85, 247, 0.5) !important;
+    animation: pulseGlow 0.8s ease-in-out infinite alternate;
+    z-index: 30 !important;
+}
+
+/* =================================================== */
+/* ★ 濃密モヤモヤ ＆ 最前面テキスト表示構造           */
+/* =================================================== */
+
+/* 1. デバフ予約バッジ（明滅アニメーション） */
+@keyframes badgePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 8px rgba(168, 85, 247, 0.8); }
+    50% { transform: scale(1.06); box-shadow: 0 0 18px rgba(192, 132, 252, 1); }
+}
+
+.debuff-badge {
+    animation: badgePulse 1.2s infinite ease-in-out;
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.95) 0%, rgba(126, 34, 206, 0.95) 100%);
+    border: 1.5px solid #c084fc;
+    color: #f3e8ff;
+    border-radius: 9999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    font-family: 'Yuji Boku', serif;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    backdrop-filter: blur(4px);
+    z-index: 25;
+}
+
+/* 2. 超濃密な紫の妖気モヤモヤ（霧）オーバーレイ */
+@keyframes purpleFogAnim {
+    0% { opacity: 0; transform: scale(0.85); filter: blur(25px); }
+    25% { opacity: 0.98; transform: scale(1.02); filter: blur(6px); }
+    75% { opacity: 0.98; transform: scale(1.05); filter: blur(4px); }
+    100% { opacity: 0; transform: scale(1.18); filter: blur(20px); }
+}
+
+.purple-fog-overlay {
+    position: absolute;
+    inset: -15px;
+    /* より濃く不透明な禍々しい紫グラデーション */
+    background: radial-gradient(circle, rgba(126, 34, 206, 0.98) 0%, rgba(88, 28, 135, 0.95) 55%, rgba(15, 23, 42, 0.9) 85%);
+    border-radius: 24px;
+    border: 3px solid #c084fc;
+    box-shadow: 0 0 50px rgba(168, 85, 247, 1), inset 0 0 40px rgba(126, 34, 206, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100; /* モヤモヤ自体の階層 */
+    pointer-events: none;
+    animation: purpleFogAnim 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 3. モヤモヤの完全に「最前面（最上階層）」に表示されるテキスト容器 */
+.purple-fog-text-container {
+    position: relative;
+    z-index: 9999 !important; /* 物理的な最前面に固定 */
+    transform: translateZ(0);
+}
+
+/* 4. デバフ適用時の「ガクン！」数値低下アニメーション */
+@keyframes statDropAnim {
+    0% { transform: translateY(0); filter: brightness(1); }
+    20% { transform: translateY(-8px) scale(1.1); color: #c084fc; filter: brightness(2) drop-shadow(0 0 20px #a855f7); }
+    50% { transform: translateY(12px) scale(0.92); color: #f43f5e; filter: brightness(1.2); }
+    70% { transform: translateY(-3px); }
+    100% { transform: translateY(0); filter: brightness(1); }
+}
+
+.stat-drop {
+    animation: statDropAnim 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* =================================================== */
+/* ★ 和風純黒（完全漆黒）全画面暗転トランジション   */
+/* =================================================== */
+
+@keyframes sumiArashiAnim {
+    0% {
+        opacity: 0;
+        transform: scale(0.3) rotate(-10deg);
+        filter: blur(20px);
+    }
+    40% {
+        opacity: 0.98;
+        transform: scale(1.05) rotate(0deg);
+        filter: blur(4px);
+    }
+    70% {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0px);
+        background-color: #000000; /* 100% 漆黒 */
+    }
+    100% {
+        opacity: 1;
+        background-color: #000000;
+    }
+}
+
+.sumi-arashi-overlay {
+    position: fixed;
+    inset: -20px;
+    z-index: 999999 !important;
+    pointer-events: none;
+    /* 紫味・青味を完全排除した純黒・濃墨グラデーション */
+    background: radial-gradient(circle at center, #000000 0%, #0a0a0a 50%, #000000 85%);
+    box-shadow: inset 0 0 120px #000000;
+    animation: sumiArashiAnim 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 全面ホワイトアウト用オーバーレイ */
+.whiteout-transition-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999999 !important;
+    pointer-events: none;
+    background-color: #ffffff;
+    opacity: 0;
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}

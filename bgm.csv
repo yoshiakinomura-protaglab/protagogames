@@ -1,0 +1,16 @@
+bgm_id,scene,bgm_file
+title,title,title_bgm.mp3
+d01,battle,yayoi_bgm.mp3
+d02,battle,yayoi_bgm.mp3
+d03,battle,yayoi_bgm.mp3
+d04,battle,kofun_bgm.mp3
+d05,battle,kofun_bgm.mp3
+d06,battle,kofun_bgm.mp3
+d07,battle,asuka_bgm.mp3
+d08,battle,asuka_bgm.mp3
+d09,battle,asuka_bgm.mp3
+win_perfect,result,win_perfect_bgm.mp3
+win_normal,result,win_normal_bgm.mp3
+lose_perfect,result,lose_perfect_bgm.mp3
+lose_normal,result,lose_normal_bgm.mp3
+deckbuild,deckbuild,deckbuild_bgm.mp3
