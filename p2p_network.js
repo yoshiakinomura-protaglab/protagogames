@@ -1,170 +1,184 @@
-class P2PNetwork {
+/**
+ * p2p_network.js - PeerJSを用いたP2P通信管理モジュール (STUN/ICE最適化版)
+ */
+
+export class P2PNetwork {
     constructor() {
         this.peer = null;
         this.conn = null;
+        this.myPeerId = null;
+        this.targetPeerId = null;
         this.isHost = false;
-        this.currentRoomId = null;
-        this.connectedPlayers = 0; // 接続人数カウント
-        this.onMessageCallback = null;
-        this.onConnectedCallback = null;
-
-        // 無料の公認PeerJSサーバー設定（STUN付き）
-        this.peerOptions = {
-            host: '0.peerjs.com',
-            port: 443,
-            path: '/',
-            secure: true,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        };
-    }
-
-    // イベントリスナーの登録
-    onMessage(callback) { this.onMessageCallback = callback; }
-    onConnected(callback) { this.onConnectedCallback = callback; }
-
-    // データ送信
-    send(data) {
-        if (this.conn && this.conn.open) {
-            this.conn.send(data);
-        }
-    }
-
-    // 部屋に入る（ホストまたは参加者として自動接続）
-    enterRoom(roomNumber) {
-        this.currentRoomId = `yamato-card-room-${roomNumber}`;
         
-        // まず自分がホストとして部屋作成を試みる
-        this.peer = new Peer(this.currentRoomId, this.peerOptions);
+        this.onConnectedCallback = null;
+        this.onDataReceivedCallback = null;
+        this.onDisconnectedCallback = null;
+        this.onErrorCallback = null;
+    }
 
-        this.peer.on('open', (id) => {
-            console.log(`[P2P] 部屋${roomNumber}のホストとして待機を開始しました`);
-            this.isHost = true;
-            this.connectedPlayers = 0;
+async init(customId = null) {
+        return new Promise((resolve, reject) => {
+            if (typeof Peer === 'undefined') {
+                const err = new Error("PeerJSライブラリが読み込まれていません。");
+                console.error(err);
+                if (this.onErrorCallback) this.onErrorCallback(err);
+                return reject(err);
+            }
 
-            // 参加者の接続を待受
-            this.peer.on('connection', (conn) => {
-                // 簡易ステータスチェック問い合わせへの応答処理
-                conn.on('data', (data) => {
-                    if (data && data.type === 'CHECK_STATUS') {
-                        if (this.connectedPlayers >= 1) {
-                            conn.send({ type: 'STATUS_FULL' });
-                        } else {
-                            conn.send({ type: 'STATUS_WAITING' });
+            // ★ STUN + TURN (Metered OpenRelay) の決定版設定
+            const peerOptions = {
+                debug: 2,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        {
+                            urls: 'turn:openrelay.metered.ca:80',
+                            username: 'openrelay',
+                            credential: 'openrelay'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443',
+                            username: 'openrelay',
+                            credential: 'openrelay'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                            username: 'openrelay',
+                            credential: 'openrelay'
                         }
-                        setTimeout(() => conn.close(), 300);
-                        return;
-                    }
-
-                    // 通常のゲームデータ受信
-                    if (this.onMessageCallback) {
-                        this.onMessageCallback(data);
-                    }
-                });
-
-                // すでに満員（対戦中）の場合、3人目は拒否する
-                if (this.connectedPlayers >= 1) {
-                    console.warn('[P2P] 満員のため接続を拒否しました');
-                    setTimeout(() => conn.close(), 500);
-                    return;
+                    ]
                 }
+            };
 
-                // 正式な対戦相手として接続確立
-                this.conn = conn;
-                this.connectedPlayers = 1;
-                this._setupConnectionEvents();
-                if (this.onConnectedCallback) this.onConnectedCallback(true);
+            this.peer = customId ? new Peer(customId, peerOptions) : new Peer(peerOptions);
+
+            this.peer.on('open', (id) => {
+                this.myPeerId = id;
+                console.log(`[P2P] Peer初期化完了. My ID: ${id}`);
+                this._setupHostIncomingListener();
+                resolve(id);
+            });
+
+            this.peer.on('error', (err) => {
+                console.error('[P2P] Peerエラー:', err);
+                if (this.onErrorCallback) this.onErrorCallback(err);
+                reject(err);
+            });
+
+            this.peer.on('disconnected', () => {
+                console.warn('[P2P] シグナリングサーバーから切断されました。再接続を試みます...');
+                if (this.peer && !this.peer.destroyed) {
+                    this.peer.reconnect();
+                }
             });
         });
+    }
 
-        // すでにホストが存在する場合（自分は2人目として参加）
-        this.peer.on('error', (err) => {
-            if (err.type === 'unavailable-id') {
-                console.log(`[P2P] 部屋${roomNumber}にホストが存在します。参加者として接続します...`);
-                this.isHost = false;
+    _setupHostIncomingListener() {
+        if (!this.peer) return;
 
-                // ランダムIDで一時的なPeerを作成してホストへ接続
-                this.peer = new Peer(this.peerOptions);
-                this.peer.on('open', () => {
-                    this.conn = this.peer.connect(this.currentRoomId, { reliable: true });
-                    this._setupConnectionEvents();
+        this.peer.on('connection', (connection) => {
+            if (this.conn) {
+                console.warn('[P2P] 既に他のプレイヤーと接続中のため拒否します');
+                connection.close();
+                return;
+            }
+
+            console.log(`[P2P] Guestからの接続を受信: ${connection.peer}`);
+            this.conn = connection;
+            this.isHost = true;
+            this.targetPeerId = connection.peer;
+
+            this._setupConnectionEvents();
+        });
+    }
+
+    connectToHost(hostPeerId) {
+        if (!this.peer) {
+            console.error('[P2P] init() を先に実行してください。');
+            return;
+        }
+
+        const cleanHostId = String(hostPeerId).trim();
+        console.log(`[P2P] Host (${cleanHostId}) へ接続試行中...`);
+
+        // ゲスト側の接続生成オプション
+        this.conn = this.peer.connect(cleanHostId, {
+            reliable: true,
+            serialization: 'json'
+        });
+        this.isHost = false;
+        this.targetPeerId = cleanHostId;
+
+        this._setupConnectionEvents();
+    }
+
+    _setupConnectionEvents() {
+        if (!this.conn) return;
+
+        // 接続成功時
+        this.conn.on('open', () => {
+            console.log(`[P2P] P2P直接通信（DataChannel）が確立しました！ 相手: ${this.targetPeerId}`);
+            if (this.onConnectedCallback) {
+                this.onConnectedCallback({
+                    isHost: this.isHost,
+                    targetPeerId: this.targetPeerId
                 });
-            } else {
-                console.error('[P2P] Peerエラー:', err);
             }
         });
-    }
 
-    // 通信イベントの設定
-    _setupConnectionEvents() {
-        this.conn.on('open', () => {
-            console.log('[P2P] 対戦相手との接続が確立しました！');
-            if (this.onConnectedCallback) this.onConnectedCallback(this.isHost);
-        });
-
+        // データ受信
         this.conn.on('data', (data) => {
-            if (data.type === 'STATUS_WAITING' || data.type === 'STATUS_FULL') return;
-            if (this.onMessageCallback) this.onMessageCallback(data);
+            console.log('[P2P] パケット受信:', data);
+            if (this.onDataReceivedCallback) {
+                this.onDataReceivedCallback(data);
+            }
         });
 
+        // 通信切断時
         this.conn.on('close', () => {
-            alert('対戦相手との接続が切断されました。');
-            location.reload();
+            console.log('[P2P] 相手との接続が切断されました');
+            this.conn = null;
+            if (this.onDisconnectedCallback) {
+                this.onDisconnectedCallback();
+            }
+        });
+
+        this.conn.on('error', (err) => {
+            console.error('[P2P] 通信エラー:', err);
+            if (this.onErrorCallback) this.onErrorCallback(err);
         });
     }
 
-    // 単一の部屋の状態（空き/待機中/対戦中）を一時接続で判定する
-    static checkRoomStatus(roomNumber) {
-        return new Promise((resolve) => {
-            const roomId = `yamato-card-room-${roomNumber}`;
-            const tempPeer = new Peer(null, {
-                host: '0.peerjs.com', port: 443, path: '/', secure: true
-            });
+    send(type, payload = {}) {
+        if (!this.conn || !this.conn.open) {
+            console.warn('[P2P] 接続が確立していないためデータを送信できません');
+            return false;
+        }
 
-            let isResolved = false;
-            const timer = setTimeout(() => {
-                if (!isResolved) {
-                    isResolved = true;
-                    tempPeer.destroy();
-                    resolve('EMPTY'); // タイムアウト時は空き扱い
-                }
-            }, 2000);
+        const packet = {
+            type: type,
+            senderId: this.myPeerId,
+            timestamp: Date.now(),
+            payload: payload
+        };
 
-            tempPeer.on('open', () => {
-                const conn = tempPeer.connect(roomId, { reliable: true });
+        console.log('[P2P] パケット送信:', packet);
+        this.conn.send(packet);
+        return true;
+    }
 
-                conn.on('open', () => {
-                    // ステータス確認要求を送信
-                    conn.send({ type: 'CHECK_STATUS' });
-
-                    conn.on('data', (data) => {
-                        if (!isResolved) {
-                            isResolved = true;
-                            clearTimeout(timer);
-                            if (data.type === 'STATUS_FULL') resolve('FULL');
-                            else if (data.type === 'STATUS_WAITING') resolve('WAITING');
-                            else resolve('EMPTY');
-                            tempPeer.destroy();
-                        }
-                    });
-                });
-
-                tempPeer.on('error', () => {
-                    if (!isResolved) {
-                        isResolved = true;
-                        clearTimeout(timer);
-                        resolve('EMPTY'); // ホストが不在＝空き部屋
-                        tempPeer.destroy();
-                    }
-                });
-            });
-        });
+    disconnect() {
+        if (this.conn) {
+            this.conn.close();
+            this.conn = null;
+        }
+        if (this.peer) {
+            this.peer.destroy();
+            this.peer = null;
+        }
+        this.myPeerId = null;
+        this.targetPeerId = null;
     }
 }
-
-// グローバルインスタンス化
-const p2p = new P2PNetwork();
