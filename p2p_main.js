@@ -151,12 +151,12 @@ function resetP2PGameVariables() {
     gameState.turnHistory = [];
 }
 
-// ① ルーム選択（処理順修正版：即時ロック ➔ デッキ選択 ➔ ID発行 ➔ 部屋開放）
+// ① ルーム選択処理（仕様完全準拠版）
 window.selectP2PRoom = async function(roomNumber) {
     gameState.currentRoomNumber = roomNumber;
     gameState.currentRoomId = `yamato-room-${roomNumber}`;
 
-    // 1. ルーム選択画面を閉じ、部屋表記を「対戦準備中」へ一時ロック（3人目遮断）
+    // 1. ルーム選択画面を閉じ、部屋表記を「🟡 対戦準備中...」へ変更（3人目を遮断）
     document.getElementById('p2p-room-select-screen')?.classList.add('hidden');
     
     const statusEl = document.getElementById(`p2p-room-status-${roomNumber}`);
@@ -167,8 +167,9 @@ window.selectP2PRoom = async function(roomNumber) {
     }
     if (btnEl) btnEl.disabled = true;
 
-    // 2. ネットワークマネージャーの事前初期化
+    // 2. ネットワークマネージャーの初期化
     gameState.p2pNetwork = new gameModules.P2PNetwork();
+
     gameState.p2pManager = new gameModules.P2PManager(gameState.p2pNetwork, {
         getSelectedCards: () => gameState.selectedCardIds,
         autoSelectRemaining: (neededCount) => {
@@ -189,8 +190,15 @@ window.selectP2PRoom = async function(roomNumber) {
             }
         },
         onOpponentDeckReady: (opponentDeck) => {
-            console.log("[P2P] 相手のデッキを受信:", opponentDeck);
+            console.log("[P2P] 相手のデッキを受信しました:", opponentDeck);
             gameState.opponentDeckData = opponentDeck;
+
+            // 自分がホストで、相手（ゲスト）が入室した場合は部屋を「🔴 対戦準備中/対戦中」に変更
+            if (statusEl) {
+                statusEl.innerText = "🔴 対戦中...";
+                statusEl.className = "text-xs text-rose-400 font-bold font-mono";
+            }
+
             checkStartBattleSequence();
         },
         onOpponentTurnChoice: (choice) => {
@@ -207,35 +215,47 @@ window.selectP2PRoom = async function(roomNumber) {
         }
     });
 
-    // 相手（ゲスト）と通信が繋がった時の処理
+    // ゲスト接続確立時の処理（ホスト・ゲスト双方）
     gameState.p2pNetwork.onConnectedCallback = () => {
-        console.log("[P2P] ゲストが入室・接続が確立しました。");
+        console.log("[P2P] プレイヤー同士の通信トンネルが確立しました！");
+        // 接続が確立したら、自分のデッキデータ（決定済みの場合）を相互送信
+        if (gameState.myDeckReadyData && gameState.p2pManager) {
+            gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+        }
     };
 
-    // 相手との通信が切断された場合のハンドリング
+    // 切断・退室発生時のハンドリング
     gameState.p2pNetwork.onDisconnectedCallback = () => {
         console.warn("[P2P] 通信が切断されました。");
 
         if (!gameState.p2pNetwork.isHost) {
-            // ゲスト側の処理：ホストが離脱したため、ルーム選択へ戻す
+            // ゲスト側：ホストが離脱した場合はルーム選択に戻す
             alert("対戦相手（ホスト）が離脱したため、ルーム選択へ戻ります。");
             
-            // 各種モーダルを閉じる
             document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
             document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
             document.getElementById('game-result-cutin-modal')?.classList.add('hidden');
 
-            // ネットワークオブジェクトの初期化
             if (gameState.p2pNetwork) {
                 try { gameState.p2pNetwork.disconnect(); } catch(e){}
             }
 
-            // ルーム選択画面を再表示
+            // ルーム選択画面を復帰
             document.getElementById('p2p-room-select-screen')?.classList.remove('hidden');
+            if (statusEl) {
+                statusEl.innerText = "⚪ 空き (0/2)";
+                statusEl.className = "text-xs text-slate-500 font-mono";
+            }
+            if (btnEl) btnEl.disabled = false;
         } else {
-            // ホスト側の処理：ゲストが離脱した場合、デッキ選択済みのまま「対戦相手待ち」に戻る
+            // ホスト側：ゲストが離脱した場合は「🟢 対戦待ち！」に戻し、次の相手を待つ
             gameState.opponentDeckData = null;
-            gameState.opponentReady = false;
+
+            if (statusEl) {
+                statusEl.innerText = "🟢 対戦待ち！";
+                statusEl.className = "text-xs text-emerald-400 font-bold font-mono";
+            }
+            if (btnEl) btnEl.disabled = false;
 
             const waitText = document.getElementById('p2p-waiting-text');
             if (waitText) waitText.innerText = "対戦相手が離脱しました。新しい対戦相手を待っています... ⏳";
@@ -243,11 +263,11 @@ window.selectP2PRoom = async function(roomNumber) {
         }
     };
 
-    // 3. まず「デッキ選択モーダル」を出す（まだPeerIDは作らない）
+    // 3. まず「デッキ選択モーダル」を画面に出す
     document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
 };
 
-// ② デッキ選択「決定」押下時の処理（ここでPeerID発行 ➔ 部屋を開放）
+// ② デッキ選択「決定」押下時の処理（ここでPeerID発行 ➔ 部屋を「🟢 対戦待ち！」へ開放）
 async function handleConfirmDeckSelection() {
     const slotId = document.getElementById('p2p-deck-dropdown')?.value || 1;
     const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
@@ -267,34 +287,79 @@ async function handleConfirmDeckSelection() {
         cardIds: (selectedDeck.cardIds || []).map(id => String(id))
     };
 
-    // 待機モーダルを表示
     const waitModal = document.getElementById('p2p-waiting-opponent-modal');
     const waitText = document.getElementById('p2p-waiting-text');
-    if (waitText) waitText.innerText = "通信初期化・相手の接続を待っています... ⏳";
+    if (waitText) waitText.innerText = "通信初期化中... ⏳";
     if (waitModal) waitModal.classList.remove('hidden');
 
-    // ★ ここでPeerIDを発行し、ホストまたはゲストとして部屋を開放・接続する
+    const statusEl = document.getElementById(`p2p-room-status-${gameState.currentRoomNumber}`);
+    const btnEl = document.getElementById(`btn-join-room-${gameState.currentRoomNumber}`);
+
     try {
         // ホストとして PeerID (yamato-room-X) の発行を試みる
         await gameState.p2pNetwork.init(gameState.currentRoomId);
-        console.log(`[P2P] デッキ選択完了 ➔ 部屋 ${gameState.currentRoomNumber} を「対戦待ち！」として開放しました。`);
+        console.log(`[P2P] 部屋 ${gameState.currentRoomNumber} のホストID発行完了！`);
+
+        // ★ デッキ選択＆ID発行が完了したので部屋表記を「🟢 対戦待ち！」にしてゲストを受け入れ可能にする
+        if (statusEl) {
+            statusEl.innerText = "🟢 対戦待ち！";
+            statusEl.className = "text-xs text-emerald-400 font-bold font-mono";
+        }
+        if (btnEl) btnEl.disabled = false;
         
-        if (waitText) waitText.innerText = "相手のデッキ選択・入室を待っています... ⏳";
+        if (waitText) waitText.innerText = "相手の接続・デッキ選択を待っています... ⏳";
     } catch(e) {
-        // 部屋が既に存在する場合はゲストとして参加接続
-        console.log(`[P2P] 部屋 ${gameState.currentRoomNumber} にゲストとして接続を完了します...`);
+        // 部屋が既に存在する場合はゲストとして接続
+        console.log(`[P2P] 部屋 ${gameState.currentRoomNumber} にゲストとして参加接続します...`);
+        
+        if (statusEl) {
+            statusEl.innerText = "🔴 対戦準備中...";
+            statusEl.className = "text-xs text-rose-400 font-bold font-mono";
+        }
+        if (btnEl) btnEl.disabled = true;
+
         await gameState.p2pNetwork.init();
         gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
-        
-        // 接続後、自分のデッキデータをホストへ即時送信
+
+        // 接続完了後、少し遅延させてホストへ自分のデッキを送信
         setTimeout(() => {
             if (gameState.p2pManager && gameState.myDeckReadyData) {
                 gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
             }
-        }, 500);
+        }, 600);
     }
 
     checkStartBattleSequence();
+}
+
+// ③ お互いのデッキ選択が揃ったら戦闘開始！
+function checkStartBattleSequence() {
+    if (gameState.myDeckReadyData && gameState.opponentDeckData) {
+        console.log("[P2P] 双方のデッキが揃いました。バトルを開始します！");
+        document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
+
+        gameState.cpuJoker = gameState.allCards.find(c => String(c.id) === String(gameState.opponentDeckData.jokerId)) || gameState.allCards[0];
+        
+        const fullCards = [];
+        const allIds = [gameState.opponentDeckData.jokerId, ...(gameState.opponentDeckData.cardIds || [])];
+        allIds.forEach(id => {
+            const card = gameState.allCards.find(c => String(c.id) === String(id));
+            if (card) fullCards.push({ ...card });
+        });
+
+        const shuffled = [...fullCards].sort(() => Math.random() - 0.5);
+        gameState.cpuHand = shuffled.slice(0, 5);
+        gameState.cpuDeck = shuffled.slice(5);
+
+        resetP2PGameVariables();
+        refreshAllUI();
+
+        triggerTurnCutin(1, () => {
+            if (gameState.p2pManager) {
+                gameState.p2pManager.startTurnTimer();
+            }
+        });
+    }
 }
 
 // ② ドロップダウン用デッキ一覧設定
