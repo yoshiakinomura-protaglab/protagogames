@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タイトル画面</title>
+    <!-- PeerJS (通信用ライブラリ) -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Tailwind CSS (安定版 v3 CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Yuji Boku & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Yuji+Boku&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000000; /* ★ #05040a から #000000 へ変更 */
+            color: #f1f5f9;
+            user-select: none;
+            -webkit-user-select: none;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        .font-yuji { font-family: 'Yuji Boku', serif; }
+        .gold-text {
+            background: linear-gradient(135deg, #fff7ed 0%, #fef08a 25%, #eab308 60%, #ca8a04 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 3D 遠近感の設定 */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .preserve-3d {
+            transform-style: preserve-3d;
+        }
+
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-black">
+
+<div id="start-overlay" class="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center cursor-pointer transition-opacity duration-700">
+    <!-- 画像とテキストを保持する親コンテナ -->
+    <div class="relative flex items-center justify-center w-full max-w-[340px] sm:max-w-[500px] px-4">
+        
+    <!-- CLICK TO START 用のロゴ画像 -->
+    <img src="images/title.jpg" alt="大和の縁 〜あやふだかぞえ〜" class="w-full h-auto block select-none mix-blend-screen">
+        
+        <!-- CLICK TO START (シルバー / プラチナグレー表記) -->
+        <div class="absolute bottom-6 sm:bottom-10 left-0 right-0 text-center z-20 pointer-events-none">
+            <p class="text-sm sm:text-base text-slate-300 font-mono font-semibold tracking-widest animate-pulse drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+                - CLICK TO START -
+            </p>
+        </div>
+
+    </div>
+</div>
+
+    <!-- BGM音声タグ -->
+    <audio id="bgm-title" src="audio/title_bgm.mp3" loop preload="auto"></audio>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startOverlay = document.getElementById('start-overlay');
+            const bgm = document.getElementById('bgm-title');
+
+            if (bgm) bgm.volume = 0.4; // 音量調整（40%）
+
+            // スタート画面タップ時の処理
+            if (startOverlay) {
+                startOverlay.addEventListener('click', () => {
+                    // 1. BGM再生開始
+                    if (bgm) {
+                        bgm.play().catch(err => {
+                            console.log("BGM再生ブロックエラー:", err);
+                        });
+                    }
+
+                    // 2. 黒背景をフェードアウト
+                    startOverlay.classList.add('opacity-0', 'pointer-events-none');
+                    
+                    setTimeout(() => {
+                        startOverlay.style.display = 'none';
+                    }, 700);
+                });
+            }
+        });
+    </script>
+
+
+<!-- TITLE SCREEN CONTAINER (純黒背景・要素復元版) -->
+    <div id="title-screen-component" class="relative z-10 max-w-7xl w-full h-full mx-auto flex flex-col justify-between p-6 sm:p-10 select-none bg-black">
+        
+        <!-- 右上：時代（GEN）フィルター ＆ 画像モード切り替えボタン -->
+        <div class="absolute top-6 right-6 sm:top-10 sm:right-10 z-30 flex items-center gap-2">
+            <!-- 時代（GEN）選択ドロップダウン -->
+            <div class="relative">
+                <select id="select-title-gen" class="px-3 py-2 pr-8 rounded-xl bg-slate-900/90 border border-amber-500/50 hover:border-amber-400 text-xs sm:text-sm font-bold text-amber-300 shadow-lg shadow-black/50 transition-all cursor-pointer focus:outline-none appearance-none">
+                    <option value="ALL">時代: すべて</option>
+                </select>
+                <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-amber-400 text-xs pointer-events-none"></i>
+            </div>
+
+            <!-- モード切り替えボタン -->
+            <button id="btn-toggle-title-mode" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/90 border border-amber-500/50 hover:border-amber-400 text-xs sm:text-sm font-bold text-amber-300 shadow-lg shadow-black/50 transition-all cursor-pointer hover:scale-105 active:scale-95">
+                <i class="fa-solid fa-image text-amber-400"></i>
+                <span>表示: <strong id="title-mode-text" class="text-yellow-300">イラスト</strong></span>
+            </button>
+        </div>
+
+        <!-- 上部・左寄せ：タイトルロゴ ＆ 中央軸同期ボタンエリア -->
+        <div class="relative z-10 flex flex-col items-start justify-between h-full sm:ml-12">
+            
+            <!-- ① ロゴ画像（背景が純黒のため、mix-blend-screenで完全に同化） -->
+            <div class="flex flex-col items-center sm:items-start justify-center -mt-8 sm:-mt-16">
+                <img id="title-logo-img" src="images/title.jpg" alt="大和の縁 〜あやふだかぞえ〜" class="max-w-[380px] sm:max-w-[570px] w-full h-auto block select-none mix-blend-screen">
+            </div>
+
+            <!-- ② フリーバトルボタンエリア -->
+            <div class="w-[380px] sm:w-[570px] flex justify-center mb-8 sm:mb-12">
+                <div id="title-menu-container" class="w-full max-w-xs sm:max-w-sm flex flex-col gap-3">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ★ 右下：3Dカード展示エリア -->
+        <div class="absolute right-8 sm:right-24 bottom-12 sm:bottom-20 flex flex-col items-center gap-4 z-20">
+            <div class="w-44 sm:w-56 aspect-[3/4] perspective-1000 pointer-events-none flex items-center justify-center">
+                <div id="title-3d-card" class="w-full h-full relative preserve-3d">
+                    <div class="absolute inset-0 w-full h-full rounded-2xl border-2 border-amber-400 overflow-hidden shadow-[0_0_40px_rgba(245,158,11,0.45)] bg-slate-900 backface-hidden">
+                        <img id="title-card-img" src="images/default.jpg" class="w-full h-full object-cover object-top" onerror="this.onerror=null; this.src='images/default.jpg';">
+                    </div>
+                    <div class="absolute inset-0 w-full h-full rounded-2xl border-2 border-amber-600 bg-slate-950 overflow-hidden shadow-2xl backface-hidden rotate-y-180">
+                        <img id="title-card-back-img" src="images/card_back.jpg" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='images/default.jpg';">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 傾き10度 ＆ 対角線軸回転制御スクリプト -->
+    <script>
+
+        // ==========================================
+        // ★ 設定パラメータ
+        // ==========================================
+        const CARD_TILT_DEGREE = 35; // 傾き角度: 10度
+        const SPIN_DURATION_SEC = 4; // 1回転の時間（秒）
+
+        let titleDisplayMode = 'illust'; // 'illust' または 'real'
+        let loadedCards = [];
+        let currentCard = null;
+        let rotationTimer = null;
+        let currentGenFilter = 'ALL'; // 現在選択中のGENタグ（初期値: ALL）
+
+        // tags.csv から GEN タグを抽出しドロップダウンを作成
+        async function initGenFilterOptions() {
+            try {
+                const response = await fetch('tags.csv');
+                const csvText = await response.text();
+                const lines = csvText.trim().split('\n');
+                if (lines.length <= 1) return;
+
+                const headers = lines[0].split(',').map(h => h.trim());
+                const tagIdx = headers.indexOf('tag');
+                const catIdx = headers.indexOf('category');
+
+                const genSelect = document.getElementById('select-title-gen');
+                if (!genSelect) return;
+
+                genSelect.innerHTML = '<option value="ALL">時代: すべて</option>';
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const cols = lines[i].split(',').map(c => c.trim());
+                    if (cols[catIdx] === 'GEN') {
+                        const opt = document.createElement('option');
+                        opt.value = cols[tagIdx];
+                        opt.textContent = `時代: ${cols[tagIdx]}`;
+                        genSelect.appendChild(opt);
+                    }
+                }
+
+                genSelect.onchange = (e) => {
+                    currentGenFilter = e.target.value;
+                    // ※ ここでは pickRandomCard() を呼ばず、タイマーに任せて裏返し時に切り替えさせます
+                };
+            } catch (err) {
+                console.error("tags.csv 読み込みエラー:", err);
+            }
+        }
+
+        const cardEl = document.getElementById('title-3d-card');
+        const imgEl = document.getElementById('title-card-img');
+        const modeBtnText = document.getElementById('title-mode-text');
+
+        // ==========================================
+        // 1. 対角線軸（右上〜左下）を中心にした10度傾斜自転
+        // ==========================================
+        let startTime = null;
+
+        function animateCard(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const progress = ((timestamp - startTime) / (SPIN_DURATION_SEC * 1000)) % 1;
+            const spinAngleDeg = progress * 360;
+
+            if (cardEl) {
+                // ① 全体を 10度 傾ける
+                // ② 右上〜左下の対角線（-36.87度）を垂直軸にセット
+                // ③ 垂直軸を中心に Y軸で回す（自転）
+                // ④ カード本来の表示角度（+36.87度）へ戻す
+                cardEl.style.transform = `
+                    rotateZ(${CARD_TILT_DEGREE}deg)
+                    rotateZ(-36.87deg)
+                    rotateY(${spinAngleDeg}deg)
+                    rotateZ(36.87deg)
+                `;
+            }
+
+            requestAnimationFrame(animateCard);
+        }
+
+        // アニメーション開始
+        requestAnimationFrame(animateCard);
+
+        // ==========================================
+        // 2. メニュー生成
+        // ==========================================
+        const menuItems = [
+            {
+                id: 'btn-free-battle',
+                title: 'フリーバトル',
+                icon: 'fa-swords',
+                badge: 'コインGET',
+                enabled: true,
+                onClick: () => {}
+            },
+            {
+                id: 'btn-p2p-battle',
+                title: '対戦 (P2P)',
+                icon: 'fa-wifi',
+                badge: '通信対戦',
+                enabled: true,
+                onClick: () => {
+                    // P2P部屋画面へ遷移
+                    window.location.href = 'p2p_room.html';
+                }
+            }, 
+            {
+                id: 'btn-deck-edit',
+                title: 'デッキ編集',
+                icon: 'fa-box-archive',
+                badge: '10枠保存可',
+                enabled: true,
+                onClick: () => {
+                    window.location.href = 'deck_edit.html';
+                }
+            }
+        ];
+        
+        function renderTitleMenu() {
+            const container = document.getElementById('title-menu-container');
+            if (!container) return;
+
+            container.innerHTML = menuItems.map(item => `
+                <button id="${item.id}" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 font-black text-sm sm:text-base shadow-xl shadow-amber-950/60 border border-amber-300 hover:scale-105 active:scale-95 transition-all text-left flex items-center justify-between cursor-pointer">
+                    <span class="flex items-center gap-2.5">
+                        <i class="fa-solid ${item.icon} text-lg"></i>
+                        <span>${item.title}</span>
+                    </span>
+                    ${item.badge ? `<span class="text-[10px] bg-slate-950/20 px-2 py-0.5 rounded font-normal">${item.badge}</span>` : ''}
+                </button>
+            `).join('');
+
+            menuItems.forEach(item => {
+                const btn = document.getElementById(item.id);
+                if (btn && item.onClick) btn.onclick = item.onClick;
+            });
+        }
+
+        // ==========================================
+        // 3. CSVロード ＆ 裏面タイミング（2秒時点）での切替
+        // ==========================================
+        async function initTitleData() {
+            try {
+                // MIMEタイプ制限を回避して直接モジュールを読み込む
+                const response = await fetch('./csvLoader.js');
+                const jsText = await response.text();
+                const blob = new Blob([jsText], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                const module = await import(blobUrl);
+                
+                const data = await module.loadGameDataFromCSV();
+                if (data && data.cardsDb && data.cardsDb.length > 0) {
+                    loadedCards = data.cardsDb;
+                    pickRandomCard();
+                    startSpinLoop();
+                }
+            } catch (err) {
+                console.error("CSV読み込みエラー:", err);
+            }
+        }
+
+        function pickRandomCard() {
+    if (!loadedCards || loadedCards.length === 0) return;
+
+    // ★ 追加：c90000番台以降（コンピューター専用キャラ）を除外するフィルター
+    const playableCards = loadedCards.filter(card => {
+        if (!card || !card.id) return false;
+        // IDから数字部分を取り出して数値化（例: "c90000" -> 90000）
+        const idNum = parseInt(String(card.id).replace(/^c/i, ''), 10);
+        return isNaN(idNum) || idNum < 90000;
+    });
+
+    // 1. GENフィルター（時代選択）の適用
+    let pool = playableCards;
+    if (currentGenFilter !== 'ALL') {
+        pool = playableCards.filter(card => {
+            if (!card) return false;
+
+            // card.tags または card.tag を取得
+            const rawTags = card.tags || card.tag;
+            if (!rawTags) return false;
+
+            let tagArray = [];
+            // 型によって判定を分岐（エラー回避）
+            if (Array.isArray(rawTags)) {
+                // すでに配列の場合
+                tagArray = rawTags.map(t => String(t).trim());
+            } else if (typeof rawTags === 'string') {
+                // カンマ区切り文字列の場合
+                tagArray = rawTags.split(',').map(t => t.trim());
+            } else {
+                // その他の型（数値等）
+                tagArray = [String(rawTags).trim()];
+            }
+
+            return tagArray.includes(currentGenFilter);
+        });
+    }
+
+    // 万が一該当するカードが存在しない場合は除外済みカードプールから抽出
+    if (pool.length === 0) pool = playableCards;
+
+    // 2. 絞り込んだプールからランダム抽出
+    const randomIndex = Math.floor(Math.random() * pool.length);
+    currentCard = pool[randomIndex];
+    updateCardDisplay();
+}
+
+        function updateCardDisplay() {
+            if (!currentCard) return;
+
+            let fileName = '';
+
+            if (titleDisplayMode === 'real') {
+                fileName = currentCard.imageReal || currentCard.image_real;
+            } else {
+                fileName = currentCard.imageIllust || currentCard.image_illust;
+            }
+
+            // 空白・NO IMAGEチェック
+            if (!fileName || typeof fileName !== 'string' || fileName.trim() === '' || fileName === 'NO IMAGE') {
+                fileName = 'default.jpg';
+            }
+
+            if (imgEl) {
+                imgEl.src = `images/${fileName.trim()}`;
+            }
+        }
+
+        function startSpinLoop() {
+            if (rotationTimer) clearInterval(rotationTimer);
+
+            // 1回転4秒のちょうど真ん中「2秒後（裏面が向いた瞬間）」で初回切り替え
+            setTimeout(() => {
+                pickRandomCard();
+
+                // 以降、4秒周期（＝毎回カードが裏返る瞬間）で新しいカードを選択
+                rotationTimer = setInterval(() => {
+                    pickRandomCard();
+                }, SPIN_DURATION_SEC * 1000);
+            }, (SPIN_DURATION_SEC / 2) * 1000);
+        }
+
+        // ==========================================
+        // 4. モード切り替えボタン
+        // ==========================================
+        const toggleBtn = document.getElementById('btn-toggle-title-mode');
+        if (toggleBtn) {
+            toggleBtn.onclick = () => {
+                titleDisplayMode = titleDisplayMode === 'illust' ? 'real' : 'illust';
+                if (modeBtnText) modeBtnText.innerText = titleDisplayMode === 'real' ? '資料' : 'イラスト';
+                updateCardDisplay();
+            };
+        }
+
+// ==========================================
+        // 対戦相手 ＆ 難易度マスターデータ
+        // ==========================================
+        const cpuOpponents = [
+            {
+                id: 'himiko',
+                name: '卑弥呼',
+                title: '邪馬台国女王',
+                image: 'images/c05000_himiko400300_i.jpg',
+                enabled: true,
+                difficulties: [
+                    { level: 1, stars: '★', label: '初級', deckId: 'd03', enabled: true },
+                    { level: 2, stars: '★★', label: '中級', deckId: 'd02', enabled: true },
+                    { level: 3, stars: '★★★', label: '上級', deckId: 'd01', enabled: true }
+                ]
+            },
+            {
+                id: 'yamatotakeru',
+                name: '日本武尊',
+                title: '古代最強伝承',
+                image: 'images/c10000_yamatotakeru400300_i.jpg',
+                enabled: true,
+                difficulties: [
+                    { level: 1, stars: '★', label: '初級', deckId: 'd06', enabled: true },
+                    { level: 2, stars: '★★', label: '中級', deckId: 'd05', enabled: true },
+                    { level: 3, stars: '★★★', label: '上級', deckId: 'd04', enabled: true }
+                ]
+            },
+            {
+                id: 'tenji',
+                name: '天智天皇',
+                title: '黎明の覇王',
+                image: 'images/c15000_tenji400300_i.jpg',
+                enabled: true,
+                difficulties: [
+                    { level: 1, stars: '★', label: '初級', deckId: 'd09', enabled: true },
+                    { level: 2, stars: '★★', label: '中級', deckId: 'd08', enabled: true },
+                    { level: 3, stars: '★★★', label: '上級', deckId: 'd07', enabled: true }
+                ]
+            }
+        ];
+
+        // 現在選択中の状態
+        let selectedOpponent = cpuOpponents[0]; // 初期値: 卑弥呼
+        let selectedDifficulty = cpuOpponents[0].difficulties[2]; // 初期値: ★★★ (上級)
+
+        // モーダルの描画処理
+        function renderOpponentModal() {
+            const oppContainer = document.getElementById('opponent-list-container');
+            const diffContainer = document.getElementById('difficulty-list-container');
+            if (!oppContainer || !diffContainer) return;
+
+            // 1. キャラクターカード描画
+            oppContainer.innerHTML = cpuOpponents.map(opp => {
+                const isSelected = selectedOpponent.id === opp.id;
+                if (!opp.enabled) {
+                    return `
+                        <div class="relative bg-slate-950/60 rounded-xl p-2 border border-slate-800 opacity-40 grayscale cursor-not-allowed text-center select-none">
+                            <div class="aspect-[3/4] rounded-lg overflow-hidden mb-1.5 bg-slate-900 border border-slate-800">
+                                <img src="${opp.image}" class="w-full h-full object-cover object-top" onerror="this.onerror=null; this.src='images/default.jpg';">
+                            </div>
+                            <div class="text-[10px] text-slate-400 truncate">${opp.title}</div>
+                            <div class="text-xs font-black text-slate-300 font-yuji truncate">${opp.name}</div>
+                            <span class="absolute top-2 right-2 bg-slate-800 text-slate-400 text-[9px] px-1.5 py-0.5 rounded font-bold border border-slate-700">準備中</span>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div onclick="selectOpponent('${opp.id}')" class="cursor-pointer transition-all rounded-xl p-2 text-center select-none ${
+                        isSelected 
+                            ? 'bg-amber-950/40 border-2 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-[1.02]' 
+                            : 'bg-slate-950 border border-slate-800 hover:border-amber-500/50'
+                    }">
+                        <div class="aspect-[3/4] rounded-lg overflow-hidden mb-1.5 bg-slate-900 border border-amber-500/30">
+                            <img src="${opp.image}" class="w-full h-full object-cover object-top" onerror="this.onerror=null; this.src='images/default.jpg';">
+                        </div>
+                        <div class="text-[10px] text-amber-400/80 truncate">${opp.title}</div>
+                        <div class="text-xs font-black text-amber-200 font-yuji truncate">${opp.name}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // 2. 難易度ボタン描画
+            diffContainer.innerHTML = selectedOpponent.difficulties.map(diff => {
+                const isSelected = selectedDifficulty.level === diff.level;
+                const isEnabled = diff.enabled !== false; // enabled が false 以外なら有効
+
+                // 選択不可（グレーアウト）の場合
+                if (!isEnabled) {
+                    return `
+                        <button disabled class="py-2.5 px-2 rounded-xl text-center border bg-slate-950/60 border-slate-800/80 text-slate-500 opacity-40 cursor-not-allowed select-none">
+                            <div class="text-xs tracking-widest">${diff.stars}</div>
+                            <div class="text-[10px] opacity-70">${diff.label}</div>
+                        </button>
+                    `;
+                }
+
+                // 選択可能の場合
+                return `
+                    <button onclick="selectDifficulty(${diff.level})" class="py-2.5 px-2 rounded-xl text-center border transition-all cursor-pointer ${
+                        isSelected
+                            ? 'bg-gradient-to-r from-amber-600 to-yellow-500 border-amber-300 text-slate-950 font-black shadow-md scale-[1.02]'
+                            : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-amber-500/50 font-bold'
+                    }">
+                        <div class="text-xs tracking-widest">${diff.stars}</div>
+                        <div class="text-[10px] opacity-90">${diff.label}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        // 選択用グローバル関数
+        window.selectOpponent = function(id) {
+            const opp = cpuOpponents.find(o => o.id === id);
+            if (opp && opp.enabled) {
+                selectedOpponent = opp;
+                selectedDifficulty = opp.difficulties[opp.difficulties.length - 1]; // 最難易度を初期選択
+                renderOpponentModal();
+            }
+        };
+
+        window.selectDifficulty = function(level) {
+            const diff = selectedOpponent.difficulties.find(d => d.level === level);
+            // enabled が false でない場合のみ選択を許可
+            if (diff && diff.enabled !== false) {
+                selectedDifficulty = diff;
+                renderOpponentModal();
+            }
+        };
+
+// ==========================================
+        // イベント設定 ＆ 画面遷移コントロール
+        // ==========================================
+        function initOpponentModalEvents() {
+            const modalOpponent = document.getElementById('opponent-select-modal');
+            const modalDeck = document.getElementById('modal-select-deck');
+            const modalVs = document.getElementById('modal-vs-confirm');
+
+            const btnFreeBattle = document.getElementById('btn-free-battle');
+            const btnOpponentClose = document.getElementById('btn-modal-close');
+            const btnStartBattle = document.getElementById('btn-start-battle');
+            const btnDeckCancel = document.getElementById('btn-close-deck-select');
+            const btnVsCancel = document.getElementById('btn-vs-cancel');
+            const btnVsStart = document.getElementById('btn-vs-start');
+
+            // 1. 【フリーバトル】ボタンを押したとき ➔ 対戦相手選択画面を開く
+            if (btnFreeBattle) {
+                btnFreeBattle.onclick = () => {
+                    renderOpponentModal();
+                    modalOpponent?.classList.remove('hidden');
+                };
+            }
+
+            // 2. 対戦相手画面の【戻る】ボタン ➔ タイトルへ戻る（モーダルを閉じる）
+            btnOpponentClose?.addEventListener('click', () => {
+                modalOpponent?.classList.add('hidden');
+            });
+
+            // 3. 対戦相手画面の【出陣】ボタン ➔ 対戦相手画面を隠し、デッキ選択画面を開く
+            btnStartBattle?.addEventListener('click', () => {
+                modalOpponent?.classList.add('hidden');
+                renderBattleDeckList();
+                modalDeck?.classList.remove('hidden');
+            });
+
+            // 4. デッキ選択画面の【キャンセル】ボタン ➔ デッキ選択を隠し、対戦相手画面へ戻る！
+            btnDeckCancel?.addEventListener('click', () => {
+                modalDeck?.classList.add('hidden');
+                modalOpponent?.classList.remove('hidden');
+            });
+
+            // 5. VS確認画面の【いいえ】ボタン ➔ VS画面を隠し、デッキ選択画面へ戻る
+            btnVsCancel?.addEventListener('click', () => {
+                modalVs?.classList.add('hidden');
+                modalDeck?.classList.remove('hidden');
+            });
+
+            // 6. VS確認画面の【はい（バトル開始）】 ➔ ゲーム画面へ遷移
+            btnVsStart?.addEventListener('click', () => {
+                const battleConfig = {
+                    opponentId: selectedOpponent.id,
+                    opponentName: selectedOpponent.name,
+                    difficultyLevel: selectedDifficulty.level,
+                    deckId: selectedDifficulty.deckId,
+                    playerDeck: selectedPlayerDeck
+                };
+
+                localStorage.setItem('selectedBattleConfig', JSON.stringify(battleConfig));
+                window.location.href = 'index.html';
+            });
+        }
+
+        // ==========================================
+        // ★ デッキ選択 ＆ VS確認ロジック
+        // ==========================================
+        const STORAGE_KEY_DECKS = 'yamato_縁_saved_decks_v1';
+        let selectedPlayerDeck = null;
+
+        // 保存されたデッキ一覧の描画関数
+        function renderBattleDeckList() {
+            const container = document.getElementById('battle-deck-list');
+            if (!container) return;
+
+            const raw = localStorage.getItem(STORAGE_KEY_DECKS);
+            const decks = raw ? JSON.parse(raw) : {};
+
+            let html = '';
+            for (let i = 1; i <= 10; i++) {
+                const deck = decks[i] || { id: i, name: `デッキ${i}`, jokerId: null, cardIds: [] };
+                const total = (deck.jokerId ? 1 : 0) + (deck.cardIds ? deck.cardIds.length : 0);
+                const isValid = total === 20;
+
+                html += `
+                    <div onclick="${isValid ? `window.onSelectDeckForBattle(${i})` : ''}" 
+                         class="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-950 border ${isValid ? 'border-slate-800 hover:border-amber-400 cursor-pointer' : 'border-slate-900 opacity-50 cursor-not-allowed'} transition-all group">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-black font-mono text-amber-500/80 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">#${i}</span>
+                            <span class="text-sm font-bold font-mono text-yellow-300">${deck.name}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black font-mono bg-slate-900 border ${isValid ? 'border-amber-500 text-amber-400' : 'border-slate-800 text-slate-500'} px-2.5 py-1 rounded-lg">
+                                ${total} / 20枚
+                            </span>
+                            ${!isValid ? '<span class="text-[9px] text-rose-400">枚数不足</span>' : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        // デッキがタップされた時（VS確認画面をポップアップ）
+        window.onSelectDeckForBattle = function(slotId) {
+            const raw = localStorage.getItem(STORAGE_KEY_DECKS);
+            const decks = raw ? JSON.parse(raw) : {};
+            selectedPlayerDeck = decks[slotId];
+
+            // デッキ選択画面を閉じる
+            document.getElementById('modal-select-deck')?.classList.add('hidden');
+
+            // VSモーダル情報のセット（敵側）
+            document.getElementById('vs-enemy-img').src = selectedOpponent.image;
+            document.getElementById('vs-enemy-name').innerText = selectedOpponent.name;
+            document.getElementById('vs-enemy-stars').innerText = selectedDifficulty.stars;
+
+            // プレイヤーJOKER画像の取得
+            let jokerImgFileName = 'default.jpg';
+            if (selectedPlayerDeck && selectedPlayerDeck.jokerId) {
+                const jokerCard = loadedCards.find(c => String(c.id) === String(selectedPlayerDeck.jokerId));
+                if (jokerCard) {
+                    jokerImgFileName = (titleDisplayMode === 'real' 
+                        ? (jokerCard.imageReal || jokerCard.image_real) 
+                        : (jokerCard.imageIllust || jokerCard.image_illust)) || `${jokerCard.id}_illust.jpg`;
+                } else {
+                    jokerImgFileName = `${selectedPlayerDeck.jokerId}_illust.jpg`;
+                }
+            }
+
+            const jokerImgEl = document.getElementById('vs-player-joker');
+            if (jokerImgEl) {
+                jokerImgEl.src = `images/${jokerImgFileName.trim()}`;
+                jokerImgEl.onerror = function() {
+                    this.onerror = null;
+                    this.src = 'images/default.jpg';
+                };
+            }
+
+            document.getElementById('vs-player-deck-name').innerText = selectedPlayerDeck.name;
+
+            const playerJokerName = (selectedPlayerDeck && selectedPlayerDeck.jokerId)
+                ? (loadedCards.find(c => String(c.id) === String(selectedPlayerDeck.jokerId))?.name || '---')
+                : '---';
+            const jokerNameEl = document.getElementById('vs-player-joker-name');
+            if (jokerNameEl) jokerNameEl.innerText = `総大将: ${playerJokerName}`;
+
+            // VS画面を表示
+            document.getElementById('modal-vs-confirm')?.classList.remove('hidden');
+        };
+
+        // 初期化実行（エラーが発生してもボタンだけは確実に描画する構成）
+        document.addEventListener('DOMContentLoaded', () => {
+        // 1. 最優先でメニューボタンを描画
+        try {
+        renderTitleMenu();
+        initOpponentModalEvents();
+        } catch (e) {
+        console.error("メニュー描画エラー:", e);
+        }
+
+        // 2. CSVなどのデータロード（非同期でエラーが起きてもボタンに影響させない）
+        initGenFilterOptions().catch(err => console.error("GENフィルターエラー:", err));
+        initTitleData().catch(err => console.error("データロードエラー:", err));
+    });
+    
+    // ==========================================
+        // P2P通信モーダル制御処理 (PeerJS連動)
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            let p2pNetwork = null;
+
+            const p2pInitBtn = document.getElementById('btn-p2p-init');
+            const p2pConnectBtn = document.getElementById('btn-p2p-connect');
+            const p2pCloseBtn = document.getElementById('btn-p2p-close');
+            const p2pModal = document.getElementById('p2p-match-modal');
+            const p2pStatusLog = document.getElementById('p2p-modal-status-log');
+            const p2pMyIdDisplay = document.getElementById('p2p-my-id-display');
+
+            function logP2P(msg) {
+                if (!p2pStatusLog) return;
+                const div = document.createElement('div');
+                div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                p2pStatusLog.appendChild(div);
+                p2pStatusLog.scrollTop = p2pStatusLog.scrollHeight;
+            }
+
+            if (p2pCloseBtn) {
+                p2pCloseBtn.onclick = () => {
+                    if (p2pModal) p2pModal.classList.add('hidden');
+                };
+            }
+
+            if (p2pInitBtn) {
+                p2pInitBtn.onclick = async () => {
+                    try {
+                        logP2P("初期化中...");
+
+                        if (!p2pNetwork) {
+                            const res = await fetch('./p2p_network.js');
+                            const jsText = await res.text();
+                            const blob = new Blob([jsText], { type: 'application/javascript' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            const { P2PNetwork } = await import(blobUrl);
+
+                            p2pNetwork = new P2PNetwork();
+
+                            p2pNetwork.onConnectedCallback = (info) => {
+                                logP2P(`✅ 接続成功！ 対戦画面へ移動します...`);
+                                sessionStorage.setItem('isP2PMatch', 'true');
+                                setTimeout(() => {
+                                    window.location.href = 'index.html';
+                                }, 1000);
+                            };
+                        }
+
+                        const id = await p2pNetwork.init();
+                        if (p2pMyIdDisplay) p2pMyIdDisplay.innerText = id;
+                        logP2P(`ID発行成功: ${id}`);
+                    } catch (e) {
+                        console.error(e);
+                        logP2P(`起動失敗: ${e.message || e}`);
+                    }
+                };
+            }
+
+            if (p2pConnectBtn) {
+                p2pConnectBtn.onclick = () => {
+                    const targetId = document.getElementById('p2p-target-id-input')?.value;
+                    if (!targetId) {
+                        logP2P("⚠️ 相手のIDを入力してください。");
+                        return;
+                    }
+                    if (!p2pNetwork) {
+                        logP2P("⚠️ 先に「1. ID発行・接続開始」を押してください。");
+                        return;
+                    }
+                    p2pNetwork.connectToHost(targetId);
+                    logP2P(`接続試行中: ${targetId}...`);
+                };
+            }
+        });
+
+    </script>
+    
+    <!-- ★ 追加：対戦相手 ＆ 難易度選択モーダル -->
+    <div id="opponent-select-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 hidden transition-all duration-300">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 sm:p-7 max-w-xl w-11/12 text-center shadow-2xl shadow-amber-950/80 transform transition-all scale-95 relative overflow-hidden">
+            
+            <!-- 背景装飾 -->
+            <div class="absolute -top-12 -right-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+            <!-- モーダルヘッダー -->
+            <div class="mb-5 border-b border-amber-500/30 pb-3">
+                <p class="text-xs text-amber-400/80 font-yuji tracking-widest mb-1">FREE BATTLE</p>
+                <h2 class="text-xl sm:text-2xl font-black text-yellow-300 font-yuji tracking-wider flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-swords text-amber-400"></i> 対戦相手・難易度選択
+                </h2>
+            </div>
+
+            <!-- STEP 1: 対戦相手選択（キャラカード） -->
+            <div class="mb-5 text-left">
+                <p class="text-xs font-bold text-slate-300 mb-2.5 flex items-center gap-1.5">
+                    <span class="bg-amber-500 text-slate-950 text-[10px] px-1.5 py-0.5 rounded font-black">1</span>
+                    <span>対戦相手を選択</span>
+                </p>
+                <div id="opponent-list-container" class="grid grid-cols-3 gap-2 sm:gap-3">
+                    <!-- JSで動的生成 -->
+                </div>
+            </div>
+
+            <!-- STEP 2: 難易度選択 -->
+            <div class="mb-6 text-left">
+                <p class="text-xs font-bold text-slate-300 mb-2.5 flex items-center gap-1.5">
+                    <span class="bg-amber-500 text-slate-950 text-[10px] px-1.5 py-0.5 rounded font-black">2</span>
+                    <span>難易度を選択</span>
+                </p>
+                <div id="difficulty-list-container" class="grid grid-cols-3 gap-2">
+                    <!-- JSで動的生成 -->
+                </div>
+            </div>
+
+            <!-- 下部ボタン -->
+            <div class="flex gap-3 pt-2 border-t border-slate-800">
+                <button id="btn-modal-close" class="w-1/3 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs sm:text-sm border border-slate-700 transition-all cursor-pointer active:scale-95">
+                    戻る
+                </button>
+                <button id="btn-start-battle" class="w-2/3 py-3 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:scale-[1.02] active:scale-95 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-950/60 border border-amber-300 transition-all cursor-pointer flex items-center justify-center gap-2">
+                    <span>出陣</span>
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ★ 追加: デッキ選択 Modal -->
+    <div id="modal-select-deck" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[60] hidden">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 max-w-lg w-11/12 text-center shadow-2xl relative flex flex-col max-h-[85vh]">
+            <h3 class="text-lg font-black text-amber-400 font-yuji mb-3 border-b border-amber-500/30 pb-2 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-box-archive text-amber-500"></i> 出撃デッキを選択
+            </h3>
+            
+            <div id="battle-deck-list" class="space-y-2.5 overflow-y-auto my-2 pr-1.5 flex-1">
+                <!-- JSで10個のデッキを表示 -->
+            </div>
+
+            <button id="btn-close-deck-select" class="w-full py-2.5 mt-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 cursor-pointer">
+                キャンセル
+            </button>
+        </div>
+    </div>
+
+    <!-- ★ 修正版: VS対戦確認 Modal（左：プレイヤー / 右：敵 / 総大将表示 / ボタン左右入れ替え） -->
+    <div id="modal-vs-confirm" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[70] hidden">
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 max-w-lg w-11/12 text-center shadow-2xl space-y-5">
+            <h3 class="text-base sm:text-lg font-black text-amber-300 font-yuji">出撃確認</h3>
+
+            <!-- VS 対戦カード表示エリア -->
+            <div class="flex items-center justify-between gap-3 bg-slate-950 p-4 rounded-xl border border-amber-500/30">
+                
+                <!-- ① 左側：プレイヤー情報（選択したデッキのJOKER） -->
+                <div class="flex-1 flex flex-col items-center space-y-1.5">
+                    <div class="w-16 h-20 sm:w-20 sm:h-24 rounded-lg overflow-hidden border border-amber-400 bg-slate-900 shadow-[0_0_10px_rgba(245,158,11,0.3)]">
+                        <img id="vs-player-joker" src="" class="w-full h-full object-cover">
+                    </div>
+                    <div id="vs-player-deck-name" class="text-xs font-bold font-mono text-amber-300 truncate max-w-[100px]">---</div>
+                    <!-- ② 「編成カード20枚」を「総大将〇〇」へ変更 -->
+                    <div id="vs-player-joker-name" class="text-[10px] font-bold text-slate-400 truncate max-w-[100px]">総大将: ---</div>
+                </div>
+
+                <!-- 中央 VS -->
+                <div class="text-xl sm:text-2xl font-black text-amber-500 font-mono italic animate-pulse">VS</div>
+
+                <!-- ① 右側：敵情報 -->
+                <div class="flex-1 flex flex-col items-center space-y-1.5">
+                    <div class="w-16 h-20 sm:w-20 sm:h-24 rounded-lg overflow-hidden border border-rose-500/60 bg-slate-900">
+                        <img id="vs-enemy-img" src="" class="w-full h-full object-cover">
+                    </div>
+                    <div id="vs-enemy-name" class="text-xs font-bold text-slate-200 truncate max-w-[100px]">---</div>
+                    <div id="vs-enemy-stars" class="text-amber-400 text-xs">★☆☆☆☆</div>
+                </div>
+
+            </div>
+
+            <p class="text-xs sm:text-sm font-bold text-slate-200">こちらでバトルを開始しますか？</p>
+
+            <!-- ③ ボタンエリア（左：はい / 右：いいえ に配置入れ替え） -->
+            <div class="flex items-center gap-3">
+                <button id="btn-vs-start" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm border border-amber-300 shadow-lg cursor-pointer transition-all active:scale-95">
+                    はい（バトル開始）
+                </button>
+                <button id="btn-vs-cancel" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 cursor-pointer transition-all active:scale-95">
+                    いいえ
+                </button>
+            </div>
+        </div>
+    </div>
+
+<!-- P2P対戦部屋 モーダル -->
+    <div id="p2p-match-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[90000] hidden select-none">
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 max-w-md w-11/12 text-center shadow-2xl space-y-5 border-amber-500/60">
+            <h3 class="text-xl font-black text-amber-400 font-yuji flex items-center justify-center gap-2 border-b border-slate-800 pb-3">
+                <i class="fa-solid fa-wifi text-amber-400"></i> オンライン対戦（P2P）
+            </h3>
+
+            <!-- ① P2P初期化・自分のID表示 -->
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-left space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400 font-bold">あなたの対戦ID:</span>
+                    <button id="btn-p2p-init" class="bg-amber-600 hover:bg-amber-500 text-slate-950 px-3 py-1 rounded text-xs font-black transition-all cursor-pointer">1. ID発行・接続開始</button>
+                </div>
+                <div id="p2p-my-id-display" class="font-mono text-sm text-yellow-300 font-bold break-all bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                    --- 未接続 ---
+                </div>
+            </div>
+
+            <!-- ② 相手のIDを入力して接続 -->
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-left space-y-2">
+                <label class="text-xs text-slate-400 font-bold block">相手の対戦IDを入力して参加:</label>
+                <div class="flex gap-2">
+                    <input id="p2p-target-id-input" type="text" placeholder="相手のIDを貼り付け" class="bg-slate-900 border border-slate-700 px-3 py-1.5 rounded text-xs text-slate-200 flex-1 font-mono focus:border-amber-400 outline-none">
+                    <button id="btn-p2p-connect" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-xs font-bold transition-all cursor-pointer">接続</button>
+                </div>
+            </div>
+
+            <!-- 状態・ログ出力 -->
+            <div id="p2p-modal-status-log" class="text-xs font-mono text-slate-400 bg-slate-950 p-2.5 rounded border border-slate-800 h-16 overflow-y-auto text-left leading-relaxed">
+                <div>対戦IDを発行するか、相手のIDを入力してください。</div>
+            </div>
+
+            <!-- 閉じるとタイトルへ戻る -->
+            <button id="btn-p2p-close" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all cursor-pointer">
+                閉じる
+            </button>
+        </div>
+    </div>
+
+</body>
+
+</html>

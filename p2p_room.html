@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通信対戦（P2P）- 部屋作成 / 参加</title>
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Yuji+Boku&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at 50% 20%, #1a162b 0%, #0d0b14 60%, #05040a 100%);
+            color: #f1f5f9;
+            user-select: none;
+            -webkit-user-select: none;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        .font-yuji { font-family: 'Yuji Boku', serif; }
+    </style>
+</head>
+<body class="relative w-screen h-screen flex items-center justify-center p-4">
+
+    <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl space-y-5 border-amber-500/60 relative">
+        
+        <!-- ヘッダー -->
+        <div class="border-b border-slate-800 pb-3">
+            <h1 class="text-xl sm:text-2xl font-black text-amber-400 font-yuji flex items-center justify-center gap-2">
+                <i class="fa-solid fa-wifi text-amber-400"></i> 通信対戦（P2P）
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">出撃デッキを選択して対戦相手と接続します</p>
+        </div>
+
+        <!-- 1. デッキ選択 -->
+        <div class="bg-slate-950 p-3.5 rounded-xl border border-amber-500/40 text-left space-y-1.5">
+            <label class="text-xs text-amber-300 font-bold block flex items-center gap-1.5">
+                <i class="fa-solid fa-box-archive text-amber-400"></i> 1. 出撃デッキを選択:
+            </label>
+            <select id="p2p-deck-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-yellow-300 font-bold outline-none focus:border-amber-400">
+                <!-- JSで動的生成 -->
+            </select>
+        </div>
+
+        <!-- 2. ID発行・部屋作成 -->
+        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-left space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-bold">2. 対戦部屋を作成:</span>
+                <button id="btn-p2p-init" class="bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 px-3.5 py-1.5 rounded-lg text-xs font-black shadow-md transition-all cursor-pointer">
+                    ID発行・待機
+                </button>
+            </div>
+            <div id="p2p-my-id-display" class="font-mono text-sm text-yellow-300 font-bold break-all bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-center">
+                --- 未接続 ---
+            </div>
+        </div>
+
+        <!-- 3. 相手のIDを入力して参加 -->
+        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-left space-y-2">
+            <label class="text-xs text-slate-400 font-bold block">3. 相手のIDを入力して参加:</label>
+            <div class="flex gap-2">
+                <input id="p2p-target-id-input" type="text" placeholder="相手のIDを貼り付け" class="bg-slate-900 border border-slate-700 px-3 py-2 rounded-lg text-xs text-slate-200 flex-1 font-mono focus:border-amber-400 outline-none">
+                <button id="btn-p2p-connect" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">
+                    接続
+                </button>
+            </div>
+        </div>
+
+        <!-- 状態・ログ出力 -->
+        <div id="p2p-status-log" class="text-xs font-mono text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800 h-20 overflow-y-auto text-left leading-relaxed">
+            <div>出撃デッキを選択後、「ID発行」または「接続」を行ってください。</div>
+        </div>
+
+        <!-- 戻るボタン -->
+        <button id="btn-back-to-title" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all cursor-pointer">
+            タイトルに戻る
+        </button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let p2pNetwork = null;
+
+            const deckSelect = document.getElementById('p2p-deck-select');
+            const p2pInitBtn = document.getElementById('btn-p2p-init');
+            const p2pConnectBtn = document.getElementById('btn-p2p-connect');
+            const backBtn = document.getElementById('btn-back-to-title');
+            const statusLog = document.getElementById('p2p-status-log');
+            const myIdDisplay = document.getElementById('p2p-my-id-display');
+
+            function logP2P(msg) {
+                if (!statusLog) return;
+                const div = document.createElement('div');
+                div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                statusLog.appendChild(div);
+                statusLog.scrollTop = statusLog.scrollHeight;
+            }
+
+            // 保存された10個のデッキ一覧を描画
+            function populateDeckSelect() {
+                try {
+                    const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
+                    const decks = rawDecks ? JSON.parse(rawDecks) : {};
+                    let optionsHTML = '';
+
+                    for (let i = 1; i <= 10; i++) {
+                        const deck = decks[i] || { id: i, name: `デッキ${i}`, jokerId: null, cardIds: [] };
+                        const total = (deck.jokerId ? 1 : 0) + (deck.cardIds ? deck.cardIds.length : 0);
+                        const is20 = total === 20;
+
+                        optionsHTML += `
+                            <option value="${i}" ${!is20 ? 'disabled' : ''}>
+                                #${i} ${deck.name} (${total}/20枚) ${!is20 ? '【未完成】' : ''}
+                            </option>
+                        `;
+                    }
+                    deckSelect.innerHTML = optionsHTML;
+                } catch(e) {
+                    console.error("デッキ取得エラー:", e);
+                }
+            }
+
+            // 選択したデッキ情報を設定保存
+            function saveP2PConfig() {
+                const slotId = deckSelect.value || 1;
+                const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
+                const decks = rawDecks ? JSON.parse(rawDecks) : {};
+                const selectedDeck = decks[slotId];
+
+                const battleConfig = {
+                    opponentName: 'P2P対戦相手',
+                    isP2P: true,
+                    playerDeck: selectedDeck
+                };
+                localStorage.setItem('selectedBattleConfig', JSON.stringify(battleConfig));
+                sessionStorage.setItem('isP2PMatch', 'true');
+            }
+
+            // 共通モジュールロード関数
+            async function ensureP2PNetwork() {
+                if (!p2pNetwork) {
+                    const res = await fetch('./p2p_network.js');
+                    const jsText = await res.text();
+                    const blob = new Blob([jsText], { type: 'application/javascript' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    const { P2PNetwork } = await import(blobUrl);
+
+                    p2pNetwork = new P2PNetwork();
+
+                    p2pNetwork.onConnectedCallback = (info) => {
+                        logP2P(`✅ 接続成功！ 対戦画面へ移行します...`);
+                        saveP2PConfig();
+                        setTimeout(() => {
+                            window.location.href = 'index.html';
+                        }, 1000);
+                    };
+
+                    p2pNetwork.onErrorCallback = (err) => {
+                        logP2P(`❌ 通信エラー: ${err.type || err.message || err}`);
+                    };
+                }
+                return p2pNetwork;
+            }
+
+            if (backBtn) {
+                backBtn.onclick = () => { window.location.href = 'title.html'; };
+            }
+
+            // 1. ID発行（ホスト側）
+            if (p2pInitBtn) {
+                p2pInitBtn.onclick = async () => {
+                    try {
+                        logP2P("Peerネットワーク初期化中...");
+                        const net = await ensureP2PNetwork();
+                        const id = await net.init();
+                        if (myIdDisplay) myIdDisplay.innerText = id;
+                        logP2P(`ID発行成功: ${id}`);
+                        logP2P("相手の接続を待っています...");
+                    } catch (e) {
+                        console.error(e);
+                        logP2P(`起動失敗: ${e.message || e}`);
+                    }
+                };
+            }
+
+            // 2. 相手のIDを入力して参加（ゲスト側：自動初期化付き）
+            if (p2pConnectBtn) {
+                p2pConnectBtn.onclick = async () => {
+                    const targetId = document.getElementById('p2p-target-id-input')?.value.trim();
+                    if (!targetId) {
+                        logP2P("⚠️ 相手のIDを入力してください。");
+                        return;
+                    }
+
+                    try {
+                        logP2P("接続準備中...");
+                        const net = await ensureP2PNetwork();
+                        
+                        // まだ自前のIDを発行（init）していなければ、裏で自動初期化を行う
+                        if (!net.myPeerId) {
+                            logP2P("自分のPeerを起動中...");
+                            const myId = await net.init();
+                            if (myIdDisplay) myIdDisplay.innerText = myId;
+                        }
+
+                        saveP2PConfig();
+                        logP2P(`接続試行中: ${targetId}...`);
+                        net.connectToHost(targetId);
+                    } catch (e) {
+                        console.error(e);
+                        logP2P(`接続失敗: ${e.message || e}`);
+                    }
+                };
+            }
+
+            populateDeckSelect();
+        });
+    </script>
+</body>
+</html>
