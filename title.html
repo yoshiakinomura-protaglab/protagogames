@@ -705,79 +705,14 @@
         initTitleData().catch(err => console.error("データロードエラー:", err));
     });
     
-    // ==========================================
-        // P2P通信モーダル制御処理 (PeerJS連動)
+        // ==========================================
+        // P2P対戦ボタン押下処理
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
-            let p2pNetwork = null;
-
-            const p2pInitBtn = document.getElementById('btn-p2p-init');
-            const p2pConnectBtn = document.getElementById('btn-p2p-connect');
-            const p2pCloseBtn = document.getElementById('btn-p2p-close');
-            const p2pModal = document.getElementById('p2p-match-modal');
-            const p2pStatusLog = document.getElementById('p2p-modal-status-log');
-            const p2pMyIdDisplay = document.getElementById('p2p-my-id-display');
-
-            function logP2P(msg) {
-                if (!p2pStatusLog) return;
-                const div = document.createElement('div');
-                div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-                p2pStatusLog.appendChild(div);
-                p2pStatusLog.scrollTop = p2pStatusLog.scrollHeight;
-            }
-
-            if (p2pCloseBtn) {
-                p2pCloseBtn.onclick = () => {
-                    if (p2pModal) p2pModal.classList.add('hidden');
-                };
-            }
-
-            if (p2pInitBtn) {
-                p2pInitBtn.onclick = async () => {
-                    try {
-                        logP2P("初期化中...");
-
-                        if (!p2pNetwork) {
-                            const res = await fetch('./p2p_network.js');
-                            const jsText = await res.text();
-                            const blob = new Blob([jsText], { type: 'application/javascript' });
-                            const blobUrl = URL.createObjectURL(blob);
-                            const { P2PNetwork } = await import(blobUrl);
-
-                            p2pNetwork = new P2PNetwork();
-
-                            p2pNetwork.onConnectedCallback = (info) => {
-                                logP2P(`✅ 接続成功！ 対戦画面へ移動します...`);
-                                sessionStorage.setItem('isP2PMatch', 'true');
-                                setTimeout(() => {
-                                    window.location.href = 'index.html';
-                                }, 1000);
-                            };
-                        }
-
-                        const id = await p2pNetwork.init();
-                        if (p2pMyIdDisplay) p2pMyIdDisplay.innerText = id;
-                        logP2P(`ID発行成功: ${id}`);
-                    } catch (e) {
-                        console.error(e);
-                        logP2P(`起動失敗: ${e.message || e}`);
-                    }
-                };
-            }
-
-            if (p2pConnectBtn) {
-                p2pConnectBtn.onclick = () => {
-                    const targetId = document.getElementById('p2p-target-id-input')?.value;
-                    if (!targetId) {
-                        logP2P("⚠️ 相手のIDを入力してください。");
-                        return;
-                    }
-                    if (!p2pNetwork) {
-                        logP2P("⚠️ 先に「1. ID発行・接続開始」を押してください。");
-                        return;
-                    }
-                    p2pNetwork.connectToHost(targetId);
-                    logP2P(`接続試行中: ${targetId}...`);
+            const btnP2p = document.getElementById('btn-p2p-battle');
+            if (btnP2p) {
+                btnP2p.onclick = () => {
+                    window.location.href = 'p2p_room.html';
                 };
             }
         });
