@@ -324,35 +324,6 @@ function populateP2PDeckSelect() {
     }
 }
 
-// ② デッキ選択「準備完了」ボタン押下
-function handleConfirmDeckSelection() {
-    const slotId = document.getElementById('p2p-deck-dropdown')?.value || 1;
-    const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
-    const decks = rawDecks ? JSON.parse(rawDecks) : {};
-    const selectedDeck = decks[slotId];
-
-    if (!selectedDeck || !selectedDeck.jokerId) {
-        alert("有効な20枚デッキを選択してください。");
-        return;
-    }
-
-    gameState.playerDeckIds = [String(selectedDeck.jokerId), ...(selectedDeck.cardIds || []).map(id => String(id))];
-    
-    document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
-
-    gameState.myDeckReadyData = {
-        jokerId: String(selectedDeck.jokerId),
-        cardIds: (selectedDeck.cardIds || []).map(id => String(id))
-    };
-
-    gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-
-    // ② 相手の選択を待つ画面を表示
-    document.getElementById('p2p-waiting-opponent-modal')?.classList.remove('hidden');
-
-    checkStartBattleSequence();
-}
-
 // ③ お互いのデッキ選択が揃ったら戦闘開始！
 function checkStartBattleSequence() {
     if (gameState.myDeckReadyData && gameState.opponentDeckData) {
