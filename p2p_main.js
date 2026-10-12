@@ -953,13 +953,18 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         isGameOver: isGameOver
     };
 
+    // ★ window.battleAnim の初期化を確実に待つ
     let retryCount = 0;
-    while (!window.battleAnim && retryCount < 10) {
+    while (!window.battleAnim && retryCount < 20) {
         await sleep(100);
         retryCount++;
     }
 
     if (window.battleAnim) {
+        // DOM要素の生成を保証
+        if (!document.getElementById('battle-anim-overlay')) {
+            window.battleAnim.initDOM();
+        }
         await window.battleAnim.play(animData);
     }
 
@@ -996,6 +1001,7 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
             await sleep(400);
         }
 
+        // リザルトモーダルを表示
         showTurnResultModal(playerCards, cpuCards, battleResult);
         await sleep(200);
 
@@ -1009,7 +1015,11 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
 function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex = null) {
     const modal = document.getElementById('turn-result-modal');
     if (!modal) return;
-    modal.style.zIndex = '900000';
+
+    // ★ モーダル表示を最前面かつ確実に可視状態へ展開
+    modal.style.zIndex = '999999';
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
 
     const targetTurnIdx = viewTurnIndex !== null ? viewTurnIndex : (gameState.turnHistory.length - 1);
     const historyData = gameState.turnHistory[targetTurnIdx];
@@ -1148,8 +1158,6 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
             nextBtn.innerText = '次のターンへ進む ➔';
         }
     }
-
-    modal.classList.remove('hidden');
 }
 
 window.switchResultTurnTab = function(turnIndex) {
