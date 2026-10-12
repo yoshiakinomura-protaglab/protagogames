@@ -79,7 +79,7 @@ async init(customId = null) {
         if (!this.peer) return;
 
         this.peer.on('connection', (connection) => {
-            if (this.conn) {
+            if (this.conn && this.conn.open) {
                 console.warn('[P2P] 既に他のプレイヤーと接続中のため拒否します');
                 connection.close();
                 return;
@@ -90,7 +90,19 @@ async init(customId = null) {
             this.isHost = true;
             this.targetPeerId = connection.peer;
 
+            // 即座にイベント監視を設定
             this._setupConnectionEvents();
+
+            // もしリスナー登録時点で既に open 状態になっていた場合の安全ガード
+            if (this.conn.open) {
+                console.log(`[P2P] 既に DataChannel が開いています。即時発火します。`);
+                if (this.onConnectedCallback) {
+                    this.onConnectedCallback({
+                        isHost: this.isHost,
+                        targetPeerId: this.targetPeerId
+                    });
+                }
+            }
         });
     }
 
