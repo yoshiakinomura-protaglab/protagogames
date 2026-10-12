@@ -321,21 +321,12 @@ async function handleConfirmDeckSelection() {
         if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
 
         try {
-            // Peerインスタンスの初期化を発火
-            const initPromise = gameState.p2pNetwork.init();
-
-            // 'open' イベント（初期化完了）が来たら即座にホストへ接続
-            gameState.p2pNetwork.peer.on('open', () => {
-                console.log("[P2P] ゲストPeer準備完了 ➔ ホストへ接続開始:", gameState.currentRoomId);
-                gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
-            });
-
-            // すでに open 状態になっている場合のフォールバック処理
-            if (gameState.p2pNetwork.peer.open) {
-                gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
-            }
-
-            await initPromise;
+            // 1. ゲスト自身の Peer 初期化が完全完了（open発火）するまでしっかり待つ
+            await gameState.p2pNetwork.init();
+            
+            // 2. 初期化完了後にホストへ接続を開始する
+            console.log("[P2P] ゲストPeer準備完了 ➔ ホストへ接続開始:", gameState.currentRoomId);
+            gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
         } catch (e) {
             console.error("[P2P] ゲスト接続初期化エラー:", e);
             alert("部屋の接続に失敗しました。番号を確認してください。");
@@ -404,6 +395,11 @@ function checkStartBattleSequence() {
         myDeck: !!gameState.myDeckReadyData, 
         opponentDeck: !!gameState.opponentDeckData 
     });
+
+    // 自分のデッキデータが未送信なら再送信を試みる
+    if (gameState.myDeckReadyData && !gameState.opponentDeckData && gameState.p2pManager) {
+        gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+    }
 
     if (gameState.myDeckReadyData && gameState.opponentDeckData) {
         console.log("[P2P] ⚔️ 双方のデッキが揃いました！ 対戦を開始します。");
