@@ -252,8 +252,18 @@ async function handleConfirmDeckSelection() {
             }
         },
         onOpponentDeckReady: (opponentDeck) => {
-            console.log("[P2P] 相手のデッキを受信:", opponentDeck);
+            // 【LOG 2】（ホスト側が受信） または 【LOG 4】（ゲスト側が受信）
+            const role = gameState.isHostMode ? "ホスト" : "ゲスト";
+            console.log(`[P2P] 【LOG 2/4】[${role}] 相手のデッキを受信成功！`, opponentDeck);
             gameState.opponentDeckData = opponentDeck;
+
+            // ホスト側の場合：ゲストのデッキを受信したら、自分のデッキを返信する【LOG 3】
+            if (gameState.isHostMode && gameState.myDeckReadyData && gameState.p2pManager) {
+                console.log("[P2P] 【LOG 3】[ホスト] ゲストへ自分のデッキを返信試行...", gameState.myDeckReadyData);
+                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+                console.log(`[P2P] 【LOG 3 結果】返信処理: ${success ? '成功' : '失敗'}`);
+            }
+
             checkStartBattleSequence();
         },
         // ★追加: 相手の手札ステータス受信処理
@@ -278,18 +288,19 @@ async function handleConfirmDeckSelection() {
     });
 
     gameState.p2pNetwork.onConnectedCallback = () => {
-        console.log("[P2P] ✅ DataChannel（直接通信）が確立しました！");
-        
-        // 自分のデッキデータが存在すれば相手へ即座に送信
-        if (gameState.myDeckReadyData && gameState.p2pManager) {
-            console.log("[P2P] 自分のデッキデータを相手へ送信します:", gameState.myDeckReadyData);
-            gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-        } else {
-            console.warn("[P2P] ⚠️ 接続されましたが、myDeckReadyData がまだセットされていません。");
-        }
+        const role = gameState.isHostMode ? "ホスト" : "ゲスト";
+        console.log(`[P2P] ✅ DataChannel確立！ 役割: ${role}`);
 
-        // 双方のデータが揃っているかチェックして開戦
-        checkStartBattleSequence();
+        // ゲスト側の場合：接続されたらまず自分のデッキをホストへ送信する【LOG 1】
+        if (!gameState.isHostMode) {
+            if (gameState.myDeckReadyData && gameState.p2pManager) {
+                console.log("[P2P] 【LOG 1】[ゲスト] ホストへ自分のデッキを送信試行...", gameState.myDeckReadyData);
+                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+                console.log(`[P2P] 【LOG 1 結果】送信処理: ${success ? '成功' : '失敗'}`);
+            } else {
+                console.error("[P2P] 【LOG 1 失敗】[ゲスト] デッキデータまたはp2pManagerがセットされていません。");
+            }
+        }
     };
 
     // 切断時の処理（ホスト切断ならリセット、ゲスト切断ならホストは待機継続）
@@ -321,14 +332,22 @@ async function handleConfirmDeckSelection() {
         if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
 
         try {
-            // 1. ゲスト自身の Peer 初期化が完全完了（open発火）するまでしっかり待つ
+            // ステップ1: 自分のPeer初期化完了を待つ
+            console.log("[P2P] 1/3 ゲスト自身のPeer初期化を開始...");
             await gameState.p2pNetwork.init();
             
-            // 2. 初期化完了後にホストへ接続を開始する
-            console.log("[P2P] ゲストPeer準備完了 ➔ ホストへ接続開始:", gameState.currentRoomId);
-            gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+            // ステップ2: ホストへの回線確立（DataChannel開通）を100%待つ
+            console.log("[P2P] 2/3 ホストへの回線開通を待機中...", gameState.currentRoomId);
+            await gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+
+            // ステップ3: 回線開通が「確実に終わってから」デッキ送信【LOG 1】を実行
+            console.log("[P2P] 3/3 回線開通完了！【LOG 1】デッキデータの送信を開始します。");
+            if (gameState.myDeckReadyData && gameState.p2pManager) {
+                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+                console.log(`[P2P] 【LOG 1 結果】[ゲスト] 送信処理: ${success ? '成功' : '失敗'}`);
+            }
         } catch (e) {
-            console.error("[P2P] ゲスト接続初期化エラー:", e);
+            console.error("[P2P] ゲスト接続フローエラー:", e);
             alert("部屋の接続に失敗しました。番号を確認してください。");
             cancelWaitingAndReset();
         }
@@ -395,6 +414,11 @@ function checkStartBattleSequence() {
         myDeck: !!gameState.myDeckReadyData, 
         opponentDeck: !!gameState.opponentDeckData 
     });
+
+    // 自分のデッキデータが未送信なら再送信を試みる
+    if (gameState.myDeckReadyData && !gameState.opponentDeckData && gameState.p2pManager) {
+        gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+    }
 
     if (gameState.myDeckReadyData && gameState.opponentDeckData) {
         console.log("[P2P] ⚔️ 双方のデッキが揃いました！ 対戦を開始します。");
