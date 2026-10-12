@@ -313,10 +313,23 @@ async function handleConfirmDeckSelection() {
         if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
 
         try {
-            // ゲスト側の Peer 初期化完了後にホストへ接続を実行する
-            await gameState.p2pNetwork.init();
-            gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+            // Peerインスタンスの初期化を発火
+            const initPromise = gameState.p2pNetwork.init();
+
+            // 'open' イベント（初期化完了）が来たら即座にホストへ接続
+            gameState.p2pNetwork.peer.on('open', () => {
+                console.log("[P2P] ゲストPeer準備完了 ➔ ホストへ接続開始:", gameState.currentRoomId);
+                gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+            });
+
+            // すでに open 状態になっている場合のフォールバック処理
+            if (gameState.p2pNetwork.peer.open) {
+                gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+            }
+
+            await initPromise;
         } catch (e) {
+            console.error("[P2P] ゲスト接続初期化エラー:", e);
             alert("部屋の接続に失敗しました。番号を確認してください。");
             cancelWaitingAndReset();
         }
