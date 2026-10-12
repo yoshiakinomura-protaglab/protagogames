@@ -113,28 +113,33 @@ async init(customId = null) {
             });
             this.conn = connection;
 
-            // イベントハンドラー（データ受信・切断）をセット
+            // 1. まずイベント監視（open, data, close, error）を1箇所だけで一括セット
             this._setupConnectionEvents(connection);
 
-            // 回線が「完全に開いた」ことを保証してから resolve を呼ぶ
+            // 2. 既に open なら即座に resolve
             if (connection.open) {
-                console.log("[P2P] 回線は既に開通しています。");
-                if (this.onConnectedCallback) this.onConnectedCallback({ isHost: false, targetPeerId: cleanHostId });
+                console.log("[P2P] ゲスト: すでに開通済みです。");
                 resolve(connection);
-            } else {
-                connection.once('open', () => {
-                    console.log("[P2P] 回線の開通（open）を確実に行いました。");
-                    if (this.onConnectedCallback) this.onConnectedCallback({ isHost: false, targetPeerId: cleanHostId });
-                    resolve(connection);
-                });
-
-                connection.once('error', (err) => {
-                    console.error("[P2P] 接続エラーが発生しました:", err);
-                    reject(err);
-                });
+                return;
             }
+
+            // 3. open になったら Promise を完了（resolve）させるコールバックを追加
+            const originalOnConnected = this.onConnectedCallback;
+            this.onConnectedCallback = (info) => {
+                if (originalOnConnected) originalOnConnected(info);
+                console.log("[P2P] ゲスト: DataChannel開通（open）を感知して完了します。");
+                resolve(connection);
+            };
+
+            // タイムアウト保護（5秒経っても開通しない場合はエラーで落とす）
+            setTimeout(() => {
+                if (!connection.open) {
+                    reject(new Error("[P2P] 接続タイムアウト: DataChannelが開通しませんでした。"));
+                }
+            }, 5000);
         });
     }
+    
     _setupConnectionEvents(connection = this.conn) {
         if (!connection) return;
 
