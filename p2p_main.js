@@ -80,7 +80,15 @@ const gameState = {
     myTurnChoice: null,
     opponentTurnChoice: null,
     myRematchRequest: false,
-    opponentRematchRequest: false
+    opponentRematchRequest: false,
+
+    // ★追加: 相手から受信した手札ステータス（危険度・じゃんけん枚数）
+    opponentHandStat: {
+        handPowerSum: 0,
+        gu: 0,
+        cho: 0,
+        pa: 0
+    }
 };
 
 const CATEGORY_CONFIG = {
@@ -248,6 +256,13 @@ async function handleConfirmDeckSelection() {
             gameState.opponentDeckData = opponentDeck;
             checkStartBattleSequence();
         },
+        // ★追加: 相手の手札ステータス受信処理
+        onOpponentHandStatUpdate: (statData) => {
+            if (statData) {
+                gameState.opponentHandStat = statData;
+                refreshAllUI();
+            }
+        },
         onOpponentTurnChoice: (choice) => {
             gameState.opponentTurnChoice = choice;
             checkExecuteTurn();
@@ -335,6 +350,35 @@ function populateP2PDeckSelect() {
     }
 }
 
+// ★追加: 自分の「手札Power合計」と「手札＋山札のじゃんけん枚数」を相手に通知する関数
+function sendMyHandStatUpdate() {
+    if (!gameState.p2pManager) return;
+
+    // 1. 手札5枚のPower合計値（危険度用）
+    const handPowerSum = gameState.hand.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
+
+    // 2. 手札＋山札のじゃんけんカウント
+    const counts = { gu: 0, cho: 0, pa: 0 };
+    const allMyCards = [
+        ...(Array.isArray(gameState.hand) ? gameState.hand : []),
+        ...(Array.isArray(gameState.deck) ? gameState.deck : [])
+    ];
+
+    allMyCards.forEach(card => {
+        if (card && counts[card.janken] !== undefined) {
+            counts[card.janken]++;
+        }
+    });
+
+    // 3. 相手へ送信
+    gameState.p2pManager.sendHandStatUpdate({
+        handPowerSum: handPowerSum,
+        gu: counts.gu,
+        cho: counts.cho,
+        pa: counts.pa
+    });
+}
+
 function checkStartBattleSequence() {
     if (gameState.myDeckReadyData && gameState.opponentDeckData) {
         document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
@@ -354,6 +398,9 @@ function checkStartBattleSequence() {
 
         resetP2PGameVariables();
         refreshAllUI();
+
+        // ★追加: 初回の自分の手札ステータスを相手へ送信
+        sendMyHandStatUpdate();
 
         triggerTurnCutin(1, () => {
             if (gameState.p2pManager) {
@@ -1057,22 +1104,25 @@ function proceedToNextTurn() {
     if (modal) modal.classList.add('hidden');
 
     if (!gameState.lastBattleResult) return;
-    const { battleResult, playerCards, cpuCards } = gameState.lastBattleResult;
+    const { battleResult, playerCards } = gameState.lastBattleResult;
 
+    // HP更新
     gameState.playerHp = Math.max(0, gameState.playerHp - battleResult.cpu.damageGiven);
     gameState.cpuHp = Math.max(0, gameState.cpuHp - battleResult.player.damageGiven);
 
+    // 使用カードを手札から取り除き、山札からドローして5枚に補充
     const pUsedSet = new Set(playerCards.map(c => String(c.id || c.cardId)));
     gameState.hand = gameState.hand.filter(c => !pUsedSet.has(String(c.id || c.cardId)));
 
-    const cUsedSet = new Set(cpuCards.map(c => String(c.id || c.cardId)));
-    gameState.cpuHand = gameState.cpuHand.filter(c => !cUsedSet.has(String(c.id || c.cardId)));
-
-    while (gameState.hand.length < 5 && gameState.deck.length > 0) gameState.hand.push(gameState.deck.shift());
-    while (gameState.cpuHand.length < 5 && gameState.cpuDeck.length > 0) gameState.cpuHand.push(gameState.cpuDeck.shift());
+    while (gameState.hand.length < 5 && gameState.deck.length > 0) {
+        gameState.hand.push(gameState.deck.shift());
+    }
 
     gameState.turn += 1;
     refreshAllUI();
+
+    // ★ 補充された新しい手札ステータス（危険度・じゃんけん枚数）を相手へ再送信
+    sendMyHandStatUpdate();
 
     triggerTurnCutin(gameState.turn, () => {
         if (gameState.p2pManager) {
@@ -1220,25 +1270,16 @@ function refreshAllUI() {
         }
     }
 
-    const cpuCounts = { gu: 0, cho: 0, pa: 0 };
-    const allCpuCards = [
-        ...(Array.isArray(gameState.cpuHand) ? gameState.cpuHand : []),
-        ...(Array.isArray(gameState.cpuDeck) ? gameState.cpuDeck : [])
-    ];
-
-    allCpuCards.forEach(card => {
-        if (card && cpuCounts[card.janken] !== undefined) {
-            cpuCounts[card.janken]++;
-        }
-    });
-
+    // ★修正: 受信した相手のじゃんけん枚数を表示
     const cpuGuEl = document.getElementById('cpu-deck-gu');
     const cpuChoEl = document.getElementById('cpu-deck-cho');
     const cpuPaEl = document.getElementById('cpu-deck-pa');
 
-    if (cpuGuEl) cpuGuEl.innerText = `${cpuCounts.gu}枚`;
-    if (cpuChoEl) cpuChoEl.innerText = `${cpuCounts.cho}枚`;
-    if (cpuPaEl) cpuPaEl.innerText = `${cpuCounts.pa}枚`;
+    const oppStat = gameState.opponentHandStat || { handPowerSum: 0, gu: 0, cho: 0, pa: 0 };
+
+    if (cpuGuEl) cpuGuEl.innerText = `${oppStat.gu || 0}枚`;
+    if (cpuChoEl) cpuChoEl.innerText = `${oppStat.cho || 0}枚`;
+    if (cpuPaEl) cpuPaEl.innerText = `${oppStat.pa || 0}枚`;
 
     const handContainer = document.getElementById('player-hand-container');
     if (handContainer && gameModules && gameModules.renderBattleUI) {
@@ -1248,11 +1289,12 @@ function refreshAllUI() {
         });
     }
 
+    // ★修正: 受信した相手の手札Power合計値（oppStat.handPowerSum）に基づいて危険度判定＆点滅演出
     const cpuJokerBox = document.getElementById('cpu-joker-box');
     const cpuDangerEl = document.getElementById('cpu-danger-level');
 
-    if (cpuJokerBox && cpuDangerEl && Array.isArray(gameState.cpuHand)) {
-        const cpuHandPowerSum = gameState.cpuHand.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
+    if (cpuJokerBox && cpuDangerEl) {
+        const cpuHandPowerSum = oppStat.handPowerSum || 0;
 
         cpuJokerBox.classList.remove('danger-mid-glow', 'danger-high-glow', 'danger-extreme-glow');
 
