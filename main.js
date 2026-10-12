@@ -332,14 +332,19 @@ async function handleConfirmDeckSelection() {
         if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
 
         try {
-            // 1. ゲスト自身の Peer 初期化が完全完了（open発火）するまでしっかり待つ
+            console.log("[P2P] 1/3 ゲスト自身のPeer初期化を開始...");
             await gameState.p2pNetwork.init();
             
-            // 2. 初期化完了後にホストへ接続を開始する
-            console.log("[P2P] ゲストPeer準備完了 ➔ ホストへ接続開始:", gameState.currentRoomId);
-            gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+            console.log("[P2P] 2/3 ホストへの回線開通を待機中...", gameState.currentRoomId);
+            await gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+
+            console.log("[P2P] 3/3 回線開通完了！デッキデータの送信を開始します。");
+            if (gameState.myDeckReadyData && gameState.p2pManager) {
+                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+                console.log(`[P2P] 送信処理結果: ${success ? '成功' : '失敗'}`);
+            }
         } catch (e) {
-            console.error("[P2P] ゲスト接続初期化エラー:", e);
+            console.error("[P2P] ゲスト接続フローエラー:", e);
             alert("部屋の接続に失敗しました。番号を確認してください。");
             cancelWaitingAndReset();
         }
@@ -443,29 +448,63 @@ function checkStartBattleSequence() {
 }
 
 async function checkExecuteTurn() {
+    console.log("[P2P Check] checkExecuteTurnが呼び出されました", {
+        myChoice: gameState.myTurnChoice,
+        opponentChoice: gameState.opponentTurnChoice
+    });
+
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
-        const playerCards = gameState.myTurnChoice
-            .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
-            .filter(Boolean);
+        console.log("[P2P] 双方のカード選択が揃いました！ 復元・計算を開始します。");
 
-        const cpuCards = gameState.opponentTurnChoice
-            .map(id => gameState.cpuHand.find(c => String(c.id || c.cardId) === String(id)))
-            .filter(Boolean);
+        try {
+            // 自分の選択カードを自分の手札から取得
+            const playerCards = gameState.myTurnChoice
+                .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
+                .filter(Boolean);
 
-        gameState.myTurnChoice = null;
-        gameState.opponentTurnChoice = null;
+            // 相手の選択カードを全カードDBから直接復元
+            const cpuCards = gameState.opponentTurnChoice
+                .map(id => {
+                    const found = gameState.allCards.find(c => String(c.id) === String(id));
+                    return found ? { ...found } : null;
+                })
+                .filter(Boolean);
 
-        const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
-        gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
+            console.log("[P2P] カード復元結果:", { playerCards, cpuCards });
 
-        gameState.turnHistory[gameState.turn - 1] = {
-            turnNum: gameState.turn,
-            playerCards: playerCards,
-            cpuCards: cpuCards,
-            battleResult: battleResult
-        };
+            if (playerCards.length !== 3 || cpuCards.length !== 3) {
+                console.error("[P2P 判定エラー] カードが3枚ずつ復元できませんでした。処理を中断します。", {
+                    playerCardsCount: playerCards.length,
+                    cpuCardsCount: cpuCards.length
+                });
+                return;
+            }
 
-        await runBattleAnimation(playerCards, cpuCards, battleResult);
+            // フラグをクリア
+            gameState.myTurnChoice = null;
+            gameState.opponentTurnChoice = null;
+
+            // バトル計算
+            console.log("[P2P] calculateBattleResult を実行中...");
+            const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
+            console.log("[P2P] 計算結果:", battleResult);
+
+            gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
+            gameState.turnHistory[gameState.turn - 1] = {
+                turnNum: gameState.turn,
+                playerCards: playerCards,
+                cpuCards: cpuCards,
+                battleResult: battleResult
+            };
+
+            // アニメーション実行
+            console.log("[P2P] runBattleAnimation を実行中...");
+            await runBattleAnimation(playerCards, cpuCards, battleResult);
+            console.log("[P2P] 演出完了！");
+
+        } catch (err) {
+            console.error("[P2P Fatal Error] checkExecuteTurn 内で例外が発生しました:", err);
+        }
     }
 }
 
