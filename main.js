@@ -400,7 +400,13 @@ function sendMyHandStatUpdate() {
 }
 
 function checkStartBattleSequence() {
+    console.log("[P2P] 開戦チェック:", { 
+        myDeck: !!gameState.myDeckReadyData, 
+        opponentDeck: !!gameState.opponentDeckData 
+    });
+
     if (gameState.myDeckReadyData && gameState.opponentDeckData) {
+        console.log("[P2P] ⚔️ 双方のデッキが揃いました！ 対戦を開始します。");
         document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
 
         gameState.cpuJoker = gameState.allCards.find(c => String(c.id) === String(gameState.opponentDeckData.jokerId)) || gameState.allCards[0];
@@ -419,7 +425,6 @@ function checkStartBattleSequence() {
         resetP2PGameVariables();
         refreshAllUI();
 
-        // ★追加: 初回の自分の手札ステータスを相手へ送信
         sendMyHandStatUpdate();
 
         triggerTurnCutin(1, () => {
