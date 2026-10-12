@@ -274,6 +274,7 @@ async function handleConfirmDeckSelection() {
             }
         },
         onOpponentTurnChoice: (choice) => {
+            console.log("[P2P] 相手のカード選択を受信しました:", choice);
             gameState.opponentTurnChoice = choice;
             checkExecuteTurn();
         },
@@ -448,53 +449,63 @@ function checkStartBattleSequence() {
 }
 
 async function checkExecuteTurn() {
+    console.log("[P2P Check] checkExecuteTurnが呼び出されました", {
+        myChoice: gameState.myTurnChoice,
+        opponentChoice: gameState.opponentTurnChoice
+    });
+
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
-        console.log("[P2P] 双方のカード選択が揃いました！ 判定・計算を開始します。", {
-            myChoice: gameState.myTurnChoice,
-            opponentChoice: gameState.opponentTurnChoice
-        });
+        console.log("[P2P] 双方のカード選択が揃いました！ 復元・計算を開始します。");
 
-        // 自分の選択カードを自分の手札から取得
-        const playerCards = gameState.myTurnChoice
-            .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
-            .filter(Boolean);
+        try {
+            // 自分の選択カードを自分の手札から取得
+            const playerCards = gameState.myTurnChoice
+                .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
+                .filter(Boolean);
 
-        // 相手の選択カードを「相手の手札＋全カードDB」から確実に特定
-        const cpuCards = gameState.opponentTurnChoice
-            .map(id => {
-                // まず相手の手札から探す
-                let found = gameState.cpuHand.find(c => String(c.id || c.cardId) === String(id));
-                // なければ全カードデータベースから復元
-                if (!found) {
-                    found = gameState.allCards.find(c => String(c.id) === String(id));
-                }
-                return found ? { ...found } : null;
-            })
-            .filter(Boolean);
+            // ★ 相手の選択カードを全カードDB（allCards）から直接復元
+            const cpuCards = gameState.opponentTurnChoice
+                .map(id => {
+                    const found = gameState.allCards.find(c => String(c.id) === String(id));
+                    return found ? { ...found } : null;
+                })
+                .filter(Boolean);
 
-        // 万が一カードが3枚揃わなかった場合の例外ガード
-        if (playerCards.length !== 3 || cpuCards.length !== 3) {
-            console.error("[P2P 判定エラー] 選択カードの復元に失敗しました:", { playerCards, cpuCards });
-            return;
+            console.log("[P2P] カード復元結果:", { playerCards, cpuCards });
+
+            if (playerCards.length !== 3 || cpuCards.length !== 3) {
+                console.error("[P2P 判定エラー] カードが3枚ずつ復元できませんでした。処理を中断します。", {
+                    playerCardsCount: playerCards.length,
+                    cpuCardsCount: cpuCards.length
+                });
+                return;
+            }
+
+            // フラグをクリア
+            gameState.myTurnChoice = null;
+            gameState.opponentTurnChoice = null;
+
+            // バトル計算
+            console.log("[P2P] calculateBattleResult を実行中...");
+            const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
+            console.log("[P2P] 計算結果:", battleResult);
+
+            gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
+            gameState.turnHistory[gameState.turn - 1] = {
+                turnNum: gameState.turn,
+                playerCards: playerCards,
+                cpuCards: cpuCards,
+                battleResult: battleResult
+            };
+
+            // アニメーション実行
+            console.log("[P2P] runBattleAnimation を実行中...");
+            await runBattleAnimation(playerCards, cpuCards, battleResult);
+            console.log("[P2P] 演出完了！");
+
+        } catch (err) {
+            console.error("[P2P Fatal Error] checkExecuteTurn 内で例外が発生しました:", err);
         }
-
-        // 選択保持フラグをリセット
-        gameState.myTurnChoice = null;
-        gameState.opponentTurnChoice = null;
-
-        // 戦闘計算を実行
-        const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
-        gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
-
-        gameState.turnHistory[gameState.turn - 1] = {
-            turnNum: gameState.turn,
-            playerCards: playerCards,
-            cpuCards: cpuCards,
-            battleResult: battleResult
-        };
-
-        // アニメーション演出と結果モーダル描画を実行
-        await runBattleAnimation(playerCards, cpuCards, battleResult);
     }
 }
 
