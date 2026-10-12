@@ -80,19 +80,8 @@ async init(customId = null) {
             this.isHost = true;
             this.targetPeerId = connection.peer;
 
-            // 即座にイベント監視を設定
-            this._setupConnectionEvents();
-
-            // もしリスナー登録時点で既に open 状態になっていた場合の安全ガード
-            if (this.conn.open) {
-                console.log(`[P2P] 既に DataChannel が開いています。即時発火します。`);
-                if (this.onConnectedCallback) {
-                    this.onConnectedCallback({
-                        isHost: this.isHost,
-                        targetPeerId: this.targetPeerId
-                    });
-                }
-            }
+            // 受信した connection インスタンスへ直接イベントリスナーをセット
+            this._setupConnectionEvents(connection);
         });
     }
 
@@ -105,22 +94,23 @@ async init(customId = null) {
         const cleanHostId = String(hostPeerId).trim();
         console.log(`[P2P] Host (${cleanHostId}) へ接続試行中...`);
 
-        // ゲスト側の接続生成オプション
-        this.conn = this.peer.connect(cleanHostId, {
+        // ゲスト側の接続生成
+        const connection = this.peer.connect(cleanHostId, {
             reliable: true,
             serialization: 'json'
         });
+        this.conn = connection;
         this.isHost = false;
         this.targetPeerId = cleanHostId;
 
-        this._setupConnectionEvents();
+        this._setupConnectionEvents(connection);
     }
 
-    _setupConnectionEvents() {
-        if (!this.conn) return;
+    _setupConnectionEvents(connection = this.conn) {
+        if (!connection) return;
 
-        // 接続成功時
-        this.conn.on('open', () => {
+        // 通信開通関数
+        const handleOpen = () => {
             console.log(`[P2P] P2P直接通信（DataChannel）が確立しました！ 相手: ${this.targetPeerId}`);
             if (this.onConnectedCallback) {
                 this.onConnectedCallback({
@@ -128,10 +118,17 @@ async init(customId = null) {
                     targetPeerId: this.targetPeerId
                 });
             }
-        });
+        };
+
+        // 既に open 状態の場合（すれ違い防止）
+        if (connection.open) {
+            handleOpen();
+        } else {
+            connection.on('open', handleOpen);
+        }
 
         // データ受信
-        this.conn.on('data', (data) => {
+        connection.on('data', (data) => {
             console.log('[P2P] パケット受信:', data);
             if (this.onDataReceivedCallback) {
                 this.onDataReceivedCallback(data);
@@ -139,7 +136,7 @@ async init(customId = null) {
         });
 
         // 通信切断時
-        this.conn.on('close', () => {
+        connection.on('close', () => {
             console.log('[P2P] 相手との接続が切断されました');
             this.conn = null;
             if (this.onDisconnectedCallback) {
@@ -147,7 +144,7 @@ async init(customId = null) {
             }
         });
 
-        this.conn.on('error', (err) => {
+        connection.on('error', (err) => {
             console.error('[P2P] 通信エラー:', err);
             if (this.onErrorCallback) this.onErrorCallback(err);
         });
