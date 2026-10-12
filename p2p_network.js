@@ -25,7 +25,7 @@ async init(customId = null) {
                 return reject(err);
             }
 
-            // ★ STUN標準＋高速ICE接続設定（応答不全TURNを排除）
+            // ★ STUN + 無料TURN (OpenRelay) 完全対応構成
             const peerOptions = {
                 debug: 2,
                 config: {
@@ -33,11 +33,22 @@ async init(customId = null) {
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
                         { urls: 'stun:stun2.l.google.com:19302' },
-                        { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' },
-                        { urls: 'stun:global.stun.twilio.com:3478' }
-                    ],
-                    sdpSemantics: 'unified-plan'
+                        {
+                            urls: 'turn:openrelay.metered.ca:80',
+                            username: 'openrelay',
+                            credential: 'openrelay'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443',
+                            username: 'openrelay',
+                            credential: 'openrelay'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                            username: 'openrelay',
+                            credential: 'openrelay'
+                        }
+                    ]
                 }
             };
 
