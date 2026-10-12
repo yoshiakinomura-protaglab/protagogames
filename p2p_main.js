@@ -313,6 +313,7 @@ async function handleConfirmDeckSelection() {
         if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
 
         try {
+            // ゲスト側の Peer 初期化完了後にホストへ接続を実行する
             await gameState.p2pNetwork.init();
             gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
         } catch (e) {
@@ -320,8 +321,6 @@ async function handleConfirmDeckSelection() {
             cancelWaitingAndReset();
         }
     }
-
-    checkStartBattleSequence();
 }
 
 function populateP2PDeckSelect() {
