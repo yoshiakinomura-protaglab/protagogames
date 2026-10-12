@@ -113,33 +113,46 @@ async init(customId = null) {
             });
             this.conn = connection;
 
-            // 1. まずイベント監視（open, data, close, error）を1箇所だけで一括セット
+            // 1. イベント監視（data, close, error 等）を登録
             this._setupConnectionEvents(connection);
 
-            // 2. 既に open なら即座に resolve
+            // 2. 既に open 状態なら即座に完了
             if (connection.open) {
-                console.log("[P2P] ゲスト: すでに開通済みです。");
+                console.log("[P2P] ゲスト: DataChannelは既に開通済みです。");
                 resolve(connection);
                 return;
             }
 
-            // 3. open になったら Promise を完了（resolve）させるコールバックを追加
-            const originalOnConnected = this.onConnectedCallback;
-            this.onConnectedCallback = (info) => {
-                if (originalOnConnected) originalOnConnected(info);
-                console.log("[P2P] ゲスト: DataChannel開通（open）を感知して完了します。");
+            // 3. open イベントを直接1回だけ待つ
+            const onOpen = () => {
+                console.log("[P2P] ゲスト: DataChannel開通（open）を感知！");
+                cleanup();
                 resolve(connection);
             };
 
-            // タイムアウト保護（5秒経っても開通しない場合はエラーで落とす）
-            setTimeout(() => {
-                if (!connection.open) {
-                    reject(new Error("[P2P] 接続タイムアウト: DataChannelが開通しませんでした。"));
-                }
-            }, 5000);
+            const onError = (err) => {
+                console.error("[P2P] ゲスト: 接続エラーが発生しました:", err);
+                cleanup();
+                reject(err);
+            };
+
+            // 10秒タイマー（念のためのタイムアウト）
+            const timer = setTimeout(() => {
+                cleanup();
+                reject(new Error("[P2P] 接続タイムアウト: 相手からの応答がありません。"));
+            }, 10000);
+
+            const cleanup = () => {
+                clearTimeout(timer);
+                connection.off('open', onOpen);
+                connection.off('error', onError);
+            };
+
+            connection.once('open', onOpen);
+            connection.once('error', onError);
         });
     }
-    
+
     _setupConnectionEvents(connection = this.conn) {
         if (!connection) return;
 
