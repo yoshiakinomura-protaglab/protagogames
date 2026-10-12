@@ -97,11 +97,14 @@ export class P2PManager {
         }
     }
 
-    // パケット受信分岐
     handleIncomingPacket(packet) {
         switch (packet.type) {
             case 'DECK_READY': // 相手がデッキ決定
                 if (this.gameHooks.onOpponentDeckReady) this.gameHooks.onOpponentDeckReady(packet.payload);
+                break;
+
+            case 'HAND_STAT_UPDATE': // ★追加: 相手の手札・山札ステータス（危険度・じゃんけん枚数）
+                if (this.gameHooks.onOpponentHandStatUpdate) this.gameHooks.onOpponentHandStatUpdate(packet.payload);
                 break;
 
             case 'TURN_CHOICE': // 相手の3枚選択
@@ -124,6 +127,11 @@ export class P2PManager {
     // パケット送信フック
     sendDeckReady(deckData) {
         return this.network.send('DECK_READY', deckData);
+    }
+
+    // ★追加: 自分の手札ステータス（危険度パワー・じゃんけん枚数）を相手に送信
+    sendHandStatUpdate(statData) {
+        return this.network.send('HAND_STAT_UPDATE', statData);
     }
 
     sendTurnChoice(selectedCardsData) {
