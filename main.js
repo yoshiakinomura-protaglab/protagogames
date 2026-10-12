@@ -252,8 +252,18 @@ async function handleConfirmDeckSelection() {
             }
         },
         onOpponentDeckReady: (opponentDeck) => {
-            console.log("[P2P] 相手のデッキを受信:", opponentDeck);
+            // 【LOG 2】（ホスト側が受信） または 【LOG 4】（ゲスト側が受信）
+            const role = gameState.isHostMode ? "ホスト" : "ゲスト";
+            console.log(`[P2P] 【LOG 2/4】[${role}] 相手のデッキを受信成功！`, opponentDeck);
             gameState.opponentDeckData = opponentDeck;
+
+            // ホスト側の場合：ゲストのデッキを受信したら、自分のデッキを返信する【LOG 3】
+            if (gameState.isHostMode && gameState.myDeckReadyData && gameState.p2pManager) {
+                console.log("[P2P] 【LOG 3】[ホスト] ゲストへ自分のデッキを返信試行...", gameState.myDeckReadyData);
+                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+                console.log(`[P2P] 【LOG 3 結果】返信処理: ${success ? '成功' : '失敗'}`);
+            }
+
             checkStartBattleSequence();
         },
         // ★追加: 相手の手札ステータス受信処理
@@ -278,18 +288,19 @@ async function handleConfirmDeckSelection() {
     });
 
     gameState.p2pNetwork.onConnectedCallback = () => {
-        console.log("[P2P] ✅ DataChannel（直接通信）が確立しました！");
-        
-        // 自分のデッキデータが存在すれば相手へ即座に送信
-        if (gameState.myDeckReadyData && gameState.p2pManager) {
-            console.log("[P2P] 自分のデッキデータを相手へ送信します:", gameState.myDeckReadyData);
-            gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-        } else {
-            console.warn("[P2P] ⚠️ 接続されましたが、myDeckReadyData がまだセットされていません。");
-        }
+        const role = gameState.isHostMode ? "ホスト" : "ゲスト";
+        console.log(`[P2P] ✅ DataChannel確立！ 役割: ${role}`);
 
-        // 双方のデータが揃っているかチェックして開戦
-        checkStartBattleSequence();
+        // ゲスト側の場合：接続されたらまず自分のデッキをホストへ送信する【LOG 1】
+        if (!gameState.isHostMode) {
+            if (gameState.myDeckReadyData && gameState.p2pManager) {
+                console.log("[P2P] 【LOG 1】[ゲスト] ホストへ自分のデッキを送信試行...", gameState.myDeckReadyData);
+                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+                console.log(`[P2P] 【LOG 1 結果】送信処理: ${success ? '成功' : '失敗'}`);
+            } else {
+                console.error("[P2P] 【LOG 1 失敗】[ゲスト] デッキデータまたはp2pManagerがセットされていません。");
+            }
+        }
     };
 
     // 切断時の処理（ホスト切断ならリセット、ゲスト切断ならホストは待機継続）
