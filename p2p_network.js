@@ -80,10 +80,9 @@ async init(customId = null) {
             this.isHost = true;
             this.targetPeerId = connection.peer;
 
-            // イベント監視をセット
             this._setupConnectionEvents(connection);
 
-            // ★追加：もし監視セット時点で既に回線が開通していた場合の取りこぼし防止
+            // 接続受取時点で回線が開通していた場合のすれ違い防止
             if (connection.open) {
                 console.log("[P2P] ホスト側：接続受取時点で回線開通済みのため即時通知します。");
                 if (this.onConnectedCallback) {
