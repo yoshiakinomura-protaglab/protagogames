@@ -85,27 +85,46 @@ async init(customId = null) {
         });
     }
 
-    connectToHost(hostPeerId) {
+    async connectToHost(hostPeerId) {
         if (!this.peer) {
-            console.error('[P2P] init() を先に実行してください。');
-            return;
+            throw new Error('[P2P] init() を先に実行してください。');
         }
 
         const cleanHostId = String(hostPeerId).trim();
         console.log(`[P2P] Host (${cleanHostId}) へ接続試行中...`);
 
-        // ゲスト側の接続生成
-        const connection = this.peer.connect(cleanHostId, {
-            reliable: true,
-            serialization: 'json'
-        });
-        this.conn = connection;
         this.isHost = false;
         this.targetPeerId = cleanHostId;
 
-        this._setupConnectionEvents(connection);
-    }
+        return new Promise((resolve, reject) => {
+            const connection = this.peer.connect(cleanHostId, {
+                reliable: true,
+                serialization: 'json'
+            });
+            this.conn = connection;
 
+            // イベントハンドラー（データ受信・切断）をセット
+            this._setupConnectionEvents(connection);
+
+            // 回線が「完全に開いた」ことを保証してから resolve を呼ぶ
+            if (connection.open) {
+                console.log("[P2P] 回線は既に開通しています。");
+                if (this.onConnectedCallback) this.onConnectedCallback({ isHost: false, targetPeerId: cleanHostId });
+                resolve(connection);
+            } else {
+                connection.once('open', () => {
+                    console.log("[P2P] 回線の開通（open）を確実に行いました。");
+                    if (this.onConnectedCallback) this.onConnectedCallback({ isHost: false, targetPeerId: cleanHostId });
+                    resolve(connection);
+                });
+
+                connection.once('error', (err) => {
+                    console.error("[P2P] 接続エラーが発生しました:", err);
+                    reject(err);
+                });
+            }
+        });
+    }
     _setupConnectionEvents(connection = this.conn) {
         if (!connection) return;
 
