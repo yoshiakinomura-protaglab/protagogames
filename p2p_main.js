@@ -278,10 +278,18 @@ async function handleConfirmDeckSelection() {
     });
 
     gameState.p2pNetwork.onConnectedCallback = () => {
-        console.log("[P2P] 相手との接続が確立しました。");
+        console.log("[P2P] ✅ DataChannel（直接通信）が確立しました！");
+        
+        // 自分のデッキデータが存在すれば相手へ即座に送信
         if (gameState.myDeckReadyData && gameState.p2pManager) {
+            console.log("[P2P] 自分のデッキデータを相手へ送信します:", gameState.myDeckReadyData);
             gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
+        } else {
+            console.warn("[P2P] ⚠️ 接続されましたが、myDeckReadyData がまだセットされていません。");
         }
+
+        // 双方のデータが揃っているかチェックして開戦
+        checkStartBattleSequence();
     };
 
     // 切断時の処理（ホスト切断ならリセット、ゲスト切断ならホストは待機継続）
@@ -313,21 +321,12 @@ async function handleConfirmDeckSelection() {
         if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
 
         try {
-            // Peerインスタンスの初期化を発火
-            const initPromise = gameState.p2pNetwork.init();
-
-            // 'open' イベント（初期化完了）が来たら即座にホストへ接続
-            gameState.p2pNetwork.peer.on('open', () => {
-                console.log("[P2P] ゲストPeer準備完了 ➔ ホストへ接続開始:", gameState.currentRoomId);
-                gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
-            });
-
-            // すでに open 状態になっている場合のフォールバック処理
-            if (gameState.p2pNetwork.peer.open) {
-                gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
-            }
-
-            await initPromise;
+            // 1. ゲスト自身の Peer 初期化が完全完了（open発火）するまでしっかり待つ
+            await gameState.p2pNetwork.init();
+            
+            // 2. 初期化完了後にホストへ接続を開始する
+            console.log("[P2P] ゲストPeer準備完了 ➔ ホストへ接続開始:", gameState.currentRoomId);
+            gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
         } catch (e) {
             console.error("[P2P] ゲスト接続初期化エラー:", e);
             alert("部屋の接続に失敗しました。番号を確認してください。");
@@ -392,7 +391,13 @@ function sendMyHandStatUpdate() {
 }
 
 function checkStartBattleSequence() {
+    console.log("[P2P] 開戦チェック:", { 
+        myDeck: !!gameState.myDeckReadyData, 
+        opponentDeck: !!gameState.opponentDeckData 
+    });
+
     if (gameState.myDeckReadyData && gameState.opponentDeckData) {
+        console.log("[P2P] ⚔️ 双方のデッキが揃いました！ 対戦を開始します。");
         document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
 
         gameState.cpuJoker = gameState.allCards.find(c => String(c.id) === String(gameState.opponentDeckData.jokerId)) || gameState.allCards[0];
@@ -411,7 +416,6 @@ function checkStartBattleSequence() {
         resetP2PGameVariables();
         refreshAllUI();
 
-        // ★追加: 初回の自分の手札ステータスを相手へ送信
         sendMyHandStatUpdate();
 
         triggerTurnCutin(1, () => {
