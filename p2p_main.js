@@ -449,17 +449,40 @@ function checkStartBattleSequence() {
 
 async function checkExecuteTurn() {
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
+        console.log("[P2P] 双方のカード選択が揃いました！ 判定・計算を開始します。", {
+            myChoice: gameState.myTurnChoice,
+            opponentChoice: gameState.opponentTurnChoice
+        });
+
+        // 自分の選択カードを自分の手札から取得
         const playerCards = gameState.myTurnChoice
             .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
             .filter(Boolean);
 
+        // 相手の選択カードを「相手の手札＋全カードDB」から確実に特定
         const cpuCards = gameState.opponentTurnChoice
-            .map(id => gameState.cpuHand.find(c => String(c.id || c.cardId) === String(id)))
+            .map(id => {
+                // まず相手の手札から探す
+                let found = gameState.cpuHand.find(c => String(c.id || c.cardId) === String(id));
+                // なければ全カードデータベースから復元
+                if (!found) {
+                    found = gameState.allCards.find(c => String(c.id) === String(id));
+                }
+                return found ? { ...found } : null;
+            })
             .filter(Boolean);
 
+        // 万が一カードが3枚揃わなかった場合の例外ガード
+        if (playerCards.length !== 3 || cpuCards.length !== 3) {
+            console.error("[P2P 判定エラー] 選択カードの復元に失敗しました:", { playerCards, cpuCards });
+            return;
+        }
+
+        // 選択保持フラグをリセット
         gameState.myTurnChoice = null;
         gameState.opponentTurnChoice = null;
 
+        // 戦闘計算を実行
         const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
         gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
 
@@ -470,6 +493,7 @@ async function checkExecuteTurn() {
             battleResult: battleResult
         };
 
+        // アニメーション演出と結果モーダル描画を実行
         await runBattleAnimation(playerCards, cpuCards, battleResult);
     }
 }
