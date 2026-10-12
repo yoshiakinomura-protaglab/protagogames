@@ -99,7 +99,8 @@ export class P2PManager {
 
     handleIncomingPacket(packet) {
         switch (packet.type) {
-            case 'DECK_READY': // 相手がデッキ決定
+            case 'DECK_READY':
+                console.log("[P2P MGR] 相手から DECK_READY パケットを受信しました！", packet.payload);
                 if (this.gameHooks.onOpponentDeckReady) this.gameHooks.onOpponentDeckReady(packet.payload);
                 break;
 
