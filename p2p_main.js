@@ -336,15 +336,15 @@ async function handleConfirmDeckSelection() {
             console.log("[P2P] 1/3 ゲスト自身のPeer初期化を開始...");
             await gameState.p2pNetwork.init();
             
-            // ステップ2: ホストへの回線確立（DataChannel開通）を100%待つ
+            // ステップ2: ホストへの回線確立（DataChannel開通）を100%待つ（★ await を確実に付与）
             console.log("[P2P] 2/3 ホストへの回線開通を待機中...", gameState.currentRoomId);
             await gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
 
-            // ステップ3: 回線開通が「確実に終わってから」デッキ送信【LOG 1】を実行
-            console.log("[P2P] 3/3 回線開通完了！【LOG 1】デッキデータの送信を開始します。");
+            // ステップ3: 回線開通が「確実に終わってから」デッキ送信を実行
+            console.log("[P2P] 3/3 回線開通完了！デッキデータの送信を開始します。");
             if (gameState.myDeckReadyData && gameState.p2pManager) {
                 const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-                console.log(`[P2P] 【LOG 1 結果】[ゲスト] 送信処理: ${success ? '成功' : '失敗'}`);
+                console.log(`[P2P] 送信処理結果: ${success ? '成功' : '失敗'}`);
             }
         } catch (e) {
             console.error("[P2P] ゲスト接続フローエラー:", e);
