@@ -1,5 +1,5 @@
 /**
- * p2p_main.js - オンラインP2P対戦専用メインモジュール (フリーバトル完全同期版)
+ * p2p_main.js - オンラインP2P対戦専用メインモジュール (4桁部屋番号完全同期版)
  * 役割: P2P通信同期、20枚デッキハンドシェイク、毎ターンの同時カード選択、30秒タイマー、本格計算エンジン＆演出完全連動
  */
 
@@ -60,7 +60,7 @@ const gameState = {
     cpuHand: [],
     displayMode: 'illust',
     tagMaster: {},
-    jokerResults: [], // ★ main.js 準拠: joker_results.csv 保持用
+    jokerResults: [],
     bgmMaster: [],
     turn: 1,
     maxTurn: 5,
@@ -71,7 +71,9 @@ const gameState = {
     p2pNetwork: null,
     p2pManager: null,
 
-    // ★ 同期・再戦管理用フラグ追加
+    // マッチング管理フラグ
+    isHostMode: false,
+    currentRoomCode: null,
     currentRoomId: null,
     myDeckReadyData: null,
     opponentDeckData: null,
@@ -100,10 +102,9 @@ async function initP2PGame() {
 
     gameState.allCards = loadedData.cardsDb;
     gameState.tagMaster = loadedData.tagMaster || {};
-    gameState.jokerResults = loadedData.jokerResults || []; // ★ main.js 準拠: JOKER勝利イラストデータ読み込み
+    gameState.jokerResults = loadedData.jokerResults || [];
     gameState.bgmMaster = loadedData.bgmMaster || [];
 
-    // 1. title / p2p_room から引き継いだ設定の読み込み
     const savedConfig = localStorage.getItem('selectedBattleConfig');
     if (savedConfig) {
         try {
@@ -130,10 +131,6 @@ async function initP2PGame() {
 
     setupEventListeners();
     populateP2PDeckSelect();
-
-    // テンポラリー状態の初期UI同期 & 定期チェック
-    syncRoomListUI();
-    setInterval(syncRoomListUI, 2000);
 }
 
 function resetP2PGameVariables() {
@@ -155,81 +152,78 @@ function resetP2PGameVariables() {
     gameState.turnHistory = [];
 }
 
-// 🌐 テンポラリー状態（localStorage）共有・同期関数
-function setRoomStatusShared(roomId, status) {
-    try {
-        const raw = localStorage.getItem('yamato_p2p_room_states') || '{}';
-        const states = JSON.parse(raw);
-        states[roomId] = { status: status, updatedAt: Date.now() };
-        localStorage.setItem('yamato_p2p_room_states', JSON.stringify(states));
-    } catch(e) {}
+// ==========================================================
+// 部屋作成（ホスト）& 部屋参加（ゲスト）ロジック
+// ==========================================================
+
+// 1. ホスト：新しく部屋を作るボタン押下
+function handleCreateHostRoom() {
+    gameState.isHostMode = true;
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    gameState.currentRoomCode = code;
+    gameState.currentRoomId = `yamato-room-${code}`;
+
+    document.getElementById('p2p-room-select-screen')?.classList.add('hidden');
+    document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
 }
 
-function getRoomStatusShared(roomId) {
-    try {
-        const raw = localStorage.getItem('yamato_p2p_room_states') || '{}';
-        const states = JSON.parse(raw);
-        return states[roomId] ? states[roomId].status : 'EMPTY';
-    } catch(e) {
-        return 'EMPTY';
-    }
-}
+// 2. ゲスト：4桁番号を入力して接続ボタン押下
+function handleJoinGuestRoom() {
+    const inputEl = document.getElementById('input-p2p-room-code');
+    const code = inputEl?.value?.trim();
 
-// ⚡ 部屋一覧ボタン表記の即時同期
-function syncRoomListUI() {
-    for (let i = 1; i <= 5; i++) {
-        const roomId = `yamato-room-${i}`;
-        const statusEl = document.getElementById(`p2p-room-status-${i}`);
-        const btnEl = document.getElementById(`btn-join-room-${i}`);
-        if (!statusEl || !btnEl) continue;
-
-        const status = getRoomStatusShared(roomId);
-
-        if (status === 'LOCKED') {
-            statusEl.innerText = "🔴 入室不可（準備中/対戦中）";
-            statusEl.className = "text-xs text-rose-400 font-bold font-mono";
-            btnEl.disabled = true;
-        } else if (status === 'AVAILABLE') {
-            statusEl.innerText = "🟢 入室可（対戦相手募集中！）";
-            statusEl.className = "text-xs text-emerald-400 font-bold font-mono";
-            btnEl.disabled = false;
-        } else {
-            statusEl.innerText = "⚪ 空き (0/2)";
-            statusEl.className = "text-xs text-slate-400 font-mono";
-            btnEl.disabled = false;
-        }
-    }
-}
-
-// 他タブ・他ブラウザからの書き込みをリアルタイム（ミリ秒単位）で検出
-window.addEventListener('storage', (e) => {
-    if (e.key === 'yamato_p2p_room_states') {
-        syncRoomListUI();
-    }
-});
-
-// ① ルーム選択処理（2段階テンポラリー状態制御版）
-window.selectP2PRoom = async function(roomNumber) {
-    gameState.currentRoomNumber = roomNumber;
-    gameState.currentRoomId = `yamato-room-${roomNumber}`;
-
-    const currentStatus = getRoomStatusShared(gameState.currentRoomId);
-    
-    // 【ガード】既に入室不可(LOCKED)ならタップを弾く
-    if (currentStatus === 'LOCKED' && !gameState.p2pNetwork?.peer) {
-        alert("この部屋は現在入室不可（対戦準備中または満員）です。");
-        syncRoomListUI();
+    if (!code || code.length !== 4 || isNaN(code)) {
+        alert("4桁の数字の部屋番号を入力してください。");
         return;
     }
 
-    // 1. ルーム選択画面を閉じ、部屋状態を即座に「LOCKED（入室不可）」に書き換え！
+    gameState.isHostMode = false;
+    gameState.currentRoomCode = code;
+    gameState.currentRoomId = `yamato-room-${code}`;
+
     document.getElementById('p2p-room-select-screen')?.classList.add('hidden');
-    setRoomStatusShared(gameState.currentRoomId, 'LOCKED');
-    syncRoomListUI();
+    document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
+}
 
-    // 2. ネットワークマネージャーの初期化
+// 3. 待機・接続キャンセル関数
+function cancelWaitingAndReset() {
+    if (gameState.p2pNetwork) {
+        try { gameState.p2pNetwork.disconnect(); } catch(e){}
+    }
+    document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
+    document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
+    document.getElementById('p2p-room-select-screen')?.classList.remove('hidden');
+}
+
+// 4. デッキ決定ボタン押下時（実際のP2P接続確立）
+async function handleConfirmDeckSelection() {
+    const slotId = document.getElementById('p2p-deck-dropdown')?.value || 1;
+    const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
+    const decks = rawDecks ? JSON.parse(rawDecks) : {};
+    const selectedDeck = decks[slotId];
+
+    if (!selectedDeck || !selectedDeck.jokerId) {
+        alert("有効な20枚デッキを選択してください。");
+        return;
+    }
+
+    gameState.playerDeckIds = [String(selectedDeck.jokerId), ...(selectedDeck.cardIds || []).map(id => String(id))];
+    document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
+
+    gameState.myDeckReadyData = {
+        jokerId: String(selectedDeck.jokerId),
+        cardIds: (selectedDeck.cardIds || []).map(id => String(id))
+    };
+
+    const waitModal = document.getElementById('p2p-waiting-opponent-modal');
+    const waitText = document.getElementById('p2p-waiting-text');
+    const codeBox = document.getElementById('p2p-room-code-display-box');
+    const codeDisplay = document.getElementById('display-p2p-room-code');
+
+    if (waitText) waitText.innerText = "通信初期化中... ⏳";
+    if (waitModal) waitModal.classList.remove('hidden');
+
     gameState.p2pNetwork = new gameModules.P2PNetwork();
-
     gameState.p2pManager = new gameModules.P2PManager(gameState.p2pNetwork, {
         getSelectedCards: () => gameState.selectedCardIds,
         autoSelectRemaining: (neededCount) => {
@@ -252,9 +246,6 @@ window.selectP2PRoom = async function(roomNumber) {
         onOpponentDeckReady: (opponentDeck) => {
             console.log("[P2P] 相手のデッキを受信:", opponentDeck);
             gameState.opponentDeckData = opponentDeck;
-            // 対戦開始に伴い入室不可を継続固定
-            setRoomStatusShared(gameState.currentRoomId, 'LOCKED');
-            syncRoomListUI();
             checkStartBattleSequence();
         },
         onOpponentTurnChoice: (choice) => {
@@ -272,91 +263,52 @@ window.selectP2PRoom = async function(roomNumber) {
     });
 
     gameState.p2pNetwork.onConnectedCallback = () => {
-        console.log("[P2P] P2P接続が確立しました。");
+        console.log("[P2P] 相手との接続が確立しました。");
         if (gameState.myDeckReadyData && gameState.p2pManager) {
             gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
         }
     };
 
-    // 切断時の処理：ホスト離脱なら部屋開放・リセット、ゲスト離脱ならホストは「AVAILABLE」へ復帰
+    // 切断時の処理（ホスト切断ならリセット、ゲスト切断ならホストは待機継続）
     gameState.p2pNetwork.onDisconnectedCallback = () => {
         if (!gameState.p2pNetwork.isHost) {
-            alert("対戦相手（ホスト）が離脱したため、ルーム選択へ戻ります。");
-            document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
-            document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
-            document.getElementById('game-result-cutin-modal')?.classList.add('hidden');
-
-            if (gameState.p2pNetwork) {
-                try { gameState.p2pNetwork.disconnect(); } catch(e){}
-            }
-
-            setRoomStatusShared(gameState.currentRoomId, 'EMPTY');
-            syncRoomListUI();
-            document.getElementById('p2p-room-select-screen')?.classList.remove('hidden');
+            alert("対戦相手（ホスト）が離脱したため、部屋作成画面に戻ります。");
+            cancelWaitingAndReset();
         } else {
-            // ホスト残存時は「AVAILABLE（入室可）」へ戻す
-            setRoomStatusShared(gameState.currentRoomId, 'AVAILABLE');
-            syncRoomListUI();
-
             gameState.opponentDeckData = null;
-            const waitText = document.getElementById('p2p-waiting-text');
             if (waitText) waitText.innerText = "対戦相手が離脱しました。新しい対戦相手を待っています... ⏳";
-            document.getElementById('p2p-waiting-opponent-modal')?.classList.remove('hidden');
+            if (waitModal) waitModal.classList.remove('hidden');
         }
     };
 
-    // 3. デッキ選択モーダルを表示（入室不可継続）
-    document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
-};
+    if (gameState.isHostMode) {
+        try {
+            await gameState.p2pNetwork.init(gameState.currentRoomId);
+            if (waitText) waitText.innerText = "対戦相手の接続を待っています...";
+            if (codeBox && codeDisplay) {
+                codeDisplay.innerText = gameState.currentRoomCode;
+                codeBox.classList.remove('hidden');
+            }
+        } catch (e) {
+            alert("この部屋番号は既に使われている可能性があります。もう一度やり直してください。");
+            cancelWaitingAndReset();
+        }
+    } else {
+        if (codeBox) codeBox.classList.add('hidden');
+        if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
 
-// ② デッキ選択「決定」押下時の処理
-async function handleConfirmDeckSelection() {
-    const slotId = document.getElementById('p2p-deck-dropdown')?.value || 1;
-    const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
-    const decks = rawDecks ? JSON.parse(rawDecks) : {};
-    const selectedDeck = decks[slotId];
-
-    if (!selectedDeck || !selectedDeck.jokerId) {
-        alert("有効な20枚デッキを選択してください。");
-        return;
-    }
-
-    gameState.playerDeckIds = [String(selectedDeck.jokerId), ...(selectedDeck.cardIds || []).map(id => String(id))];
-    document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
-
-    gameState.myDeckReadyData = {
-        jokerId: String(selectedDeck.jokerId),
-        cardIds: (selectedDeck.cardIds || []).map(id => String(id))
-    };
-
-    const waitModal = document.getElementById('p2p-waiting-opponent-modal');
-    const waitText = document.getElementById('p2p-waiting-text');
-    if (waitText) waitText.innerText = "通信初期化中... ⏳";
-    if (waitModal) waitModal.classList.remove('hidden');
-
-    try {
-        // ホストとして PeerID 発行
-        await gameState.p2pNetwork.init(gameState.currentRoomId);
-        
-        // ★ デッキ選択完了 & 待機開始時点で初めて「AVAILABLE（入室可）」へ書き換え！
-        setRoomStatusShared(gameState.currentRoomId, 'AVAILABLE');
-        syncRoomListUI();
-
-        if (waitText) waitText.innerText = "相手の接続・デッキ選択を待っています... ⏳";
-    } catch(e) {
-        // ゲストとして参加接続
-        await gameState.p2pNetwork.init();
-        gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
-
-        // ゲスト入室完了により「LOCKED（入室不可）」に固定
-        setRoomStatusShared(gameState.currentRoomId, 'LOCKED');
-        syncRoomListUI();
+        try {
+            await gameState.p2pNetwork.init();
+            gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
+        } catch (e) {
+            alert("部屋の接続に失敗しました。番号を確認してください。");
+            cancelWaitingAndReset();
+        }
     }
 
     checkStartBattleSequence();
 }
 
-// ② ドロップダウン用デッキ一覧設定
 function populateP2PDeckSelect() {
     const dropdown = document.getElementById('p2p-deck-dropdown');
     if (!dropdown) return;
@@ -383,7 +335,6 @@ function populateP2PDeckSelect() {
     }
 }
 
-// ③ お互いのデッキ選択が揃ったら戦闘開始！
 function checkStartBattleSequence() {
     if (gameState.myDeckReadyData && gameState.opponentDeckData) {
         document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
@@ -405,12 +356,13 @@ function checkStartBattleSequence() {
         refreshAllUI();
 
         triggerTurnCutin(1, () => {
-            gameState.p2pManager.startTurnTimer();
+            if (gameState.p2pManager) {
+                gameState.p2pManager.startTurnTimer();
+            }
         });
     }
 }
 
-// ④ お互いのターン3枚選択が揃ったらバトル実行
 async function checkExecuteTurn() {
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
         const playerCards = gameState.myTurnChoice
@@ -463,6 +415,21 @@ function stopEraBGM() {
 }
 
 function setupEventListeners() {
+    const btnCreateHost = document.getElementById('btn-create-host-room');
+    if (btnCreateHost) btnCreateHost.onclick = handleCreateHostRoom;
+
+    const btnJoinGuest = document.getElementById('btn-join-guest-room');
+    if (btnJoinGuest) btnJoinGuest.onclick = handleJoinGuestRoom;
+
+    const btnConfirmDeck = document.getElementById('btn-p2p-confirm-deck');
+    if (btnConfirmDeck) btnConfirmDeck.onclick = () => { handleConfirmDeckSelection(); };
+
+    const btnDeckCancel = document.getElementById('btn-p2p-deck-cancel');
+    if (btnDeckCancel) btnDeckCancel.onclick = cancelWaitingAndReset;
+
+    const btnCancelWait = document.getElementById('btn-cancel-waiting');
+    if (btnCancelWait) btnCancelWait.onclick = cancelWaitingAndReset;
+
     const toggleImgBtn = document.getElementById('btn-toggle-img-mode') || document.getElementById('img-mode-toggle');
     if (toggleImgBtn) {
         toggleImgBtn.onclick = () => {
@@ -478,11 +445,6 @@ function setupEventListeners() {
                 showBattleConfirmModal();
             }
         };
-    }
-
-    const btnConfirmDeck = document.getElementById('btn-p2p-confirm-deck');
-    if (btnConfirmDeck) {
-        btnConfirmDeck.onclick = () => { handleConfirmDeckSelection(); };
     }
 
     const btnRematchSame = document.getElementById('btn-p2p-rematch-same');
@@ -722,9 +684,6 @@ function hideBattleConfirmModal() {
     }
 }
 
-// -------------------------------------------------------------
-// ★ main.js 準拠: アニメーション演出＆結果動的構築
-// -------------------------------------------------------------
 async function runBattleAnimation(playerCards, cpuCards, battleResult) {
     const calcAtkText = document.getElementById('calc-total-atk')?.innerText.replace(/,/g, '') || '0';
     const calcDefText = document.getElementById('calc-total-def')?.innerText.replace(/,/g, '') || '0';
@@ -928,7 +887,6 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
     }
 }
 
-// ★ main.js 準拠: 過去ターン切替対応版 ターン結果モーダル
 function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex = null) {
     const modal = document.getElementById('turn-result-modal');
     if (!modal) return;
@@ -1123,12 +1081,10 @@ function proceedToNextTurn() {
     });
 }
 
-// ★ main.js 準拠: jokerResults CSV連動 勝敗1枚絵カットイン表示関数
 function showGameResultCutin() {
     const modal = document.getElementById('game-result-cutin-modal');
     const cutinImg = document.getElementById('result-cutin-img');
     const toResultBtn = document.getElementById('btn-cutin-to-result');
-    const restartBtn = document.getElementById('btn-cutin-restart');
     const titleBtn = document.getElementById('btn-cutin-title');
 
     if (!modal || !cutinImg) return;
@@ -1136,7 +1092,6 @@ function showGameResultCutin() {
     const playerJokerId = gameState.playerDeckIds[0] || 'c00000';
     let resultType = 'win_normal';
     
-    // HP勝敗判定（勝者と敗者で異なるCGイラスト・テキストを表示）
     if (gameState.playerHp > gameState.cpuHp) {
         resultType = gameState.cpuHp <= 0 ? 'win_perfect' : 'win_normal';
     } else {
@@ -1178,7 +1133,6 @@ function showGameResultCutin() {
     }
 }
 
-// ⑥ 再戦処理（「同じデッキで再戦」）
 function handleRematchSameDeck() {
     gameState.myRematchRequest = true;
     gameState.p2pManager.sendRematchSame();
@@ -1193,24 +1147,19 @@ function handleRematchSameDeck() {
     }
 }
 
-// ⑥ 再戦シーケンス開始（双方同意時）
 function startRematchSequence() {
     gameState.myRematchRequest = false;
     gameState.opponentRematchRequest = false;
 
-    // 手札・デッキ状態を初期化
     resetP2PGameVariables();
 
-    // 相手へ自分のデッキReadyを再送信
     if (gameState.myDeckReadyData) {
         gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
     }
     
-    // 戦闘開始チェックへ進行
     checkStartBattleSequence();
 }
 
-// ⑥ 再戦処理（「デッキを選び直す」）
 function handleRematchChangeDeck() {
     gameState.p2pManager.sendChangeDeck();
     resetToDeckSelectModal();
@@ -1226,7 +1175,6 @@ function resetToDeckSelectModal() {
     document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
 }
 
-// ★ main.js 準拠: UI更新（敵軍危険度判定＆点滅表示含む）
 function refreshAllUI() {
     const turnEl = document.getElementById('current-turn-num');
     if (turnEl) turnEl.innerText = `${Math.min(gameState.turn, gameState.maxTurn)}/${gameState.maxTurn}`;
@@ -1261,7 +1209,6 @@ function refreshAllUI() {
                 ? (gameState.cpuJoker.imageReal || gameState.cpuJoker.image_real)
                 : (gameState.cpuJoker.imageIllust || gameState.cpuJoker.image_illust);
             
-            // ★ この1行を追加（画像表示時の縦横比・サイズ崩れを固定）
             cpuImgEl.className = "w-full h-full object-cover object-top aspect-[3/4]";
 
             if (imageName) {
@@ -1301,7 +1248,6 @@ function refreshAllUI() {
         });
     }
 
-    // ★ main.js 準拠: 危険度判定＆点滅演出の適用
     const cpuJokerBox = document.getElementById('cpu-joker-box');
     const cpuDangerEl = document.getElementById('cpu-danger-level');
 
@@ -1331,7 +1277,6 @@ function refreshAllUI() {
     updateCalculatorUI();
 }
 
-// ★ main.js 準拠: ポーカー役フル判定 (スリーカード, ストレート, ワンペア, 役なし, JOKER判定)
 function getPokerHandInfo(cards) {
     if (!cards || cards.length !== 3) {
         return { name: '役なし', multiplier: 1.0 };
@@ -1508,7 +1453,6 @@ function updateCalculatorUI() {
             `);
         }
 
-        // ★ UI崩れガード: スクロール制御と高さを完全固定
         tagsEl.className = "grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] overflow-y-auto content-start";
         tagsEl.innerHTML = slotsHTML.join('');
     }
@@ -1523,7 +1467,6 @@ function updateCalculatorUI() {
     if (defEl) defEl.innerText = totalDef.toLocaleString();
 }
 
-// ★ main.js 準拠: じゃんけん型特定ロジック
 function getJankenHandType(cards) {
     if (!cards || cards.length !== 3) return 'none';
     const counts = { gu: 0, cho: 0, pa: 0 };
@@ -1541,7 +1484,6 @@ function getJankenHandType(cards) {
     return 'none';
 }
 
-// ★ main.js 準拠: じゃんけん勝敗判定＆補正倍率算出
 function getJankenMultipliers(playerHandType, cpuHandType) {
     if (playerHandType === cpuHandType) {
         return { playerMult: 1.0, cpuMult: 1.0, resultText: "引き分け" };
@@ -1562,7 +1504,6 @@ function getJankenMultipliers(playerHandType, cpuHandType) {
     }
 }
 
-// ★ main.js 準拠: 片側の特性タグ＆中間ステータス評価
 function evaluateSideStatus(cards, tagMaster) {
     const basePowerSum = cards.reduce((sum, c) => sum + (parseInt(c.power, 10) || 0), 0);
     const pokerInfo = getPokerHandInfo(cards);
@@ -1621,7 +1562,6 @@ function evaluateSideStatus(cards, tagMaster) {
     };
 }
 
-// ★ main.js 準拠: 両軍完全対戦結果計算エンジン
 function calculateBattleResult(playerCards, cpuCards, tagMaster) {
     const playerStat = evaluateSideStatus(playerCards, tagMaster);
     const cpuStat = evaluateSideStatus(cpuCards, tagMaster);
