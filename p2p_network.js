@@ -25,29 +25,19 @@ async init(customId = null) {
                 return reject(err);
             }
 
-            // ★ STUN + TURN (Metered OpenRelay) の決定版設定
+            // ★ STUN標準＋高速ICE接続設定（応答不全TURNを排除）
             const peerOptions = {
                 debug: 2,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
-                        {
-                            urls: 'turn:openrelay.metered.ca:80',
-                            username: 'openrelay',
-                            credential: 'openrelay'
-                        },
-                        {
-                            urls: 'turn:openrelay.metered.ca:443',
-                            username: 'openrelay',
-                            credential: 'openrelay'
-                        },
-                        {
-                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                            username: 'openrelay',
-                            credential: 'openrelay'
-                        }
-                    ]
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' },
+                        { urls: 'stun:global.stun.twilio.com:3478' }
+                    ],
+                    sdpSemantics: 'unified-plan'
                 }
             };
 
