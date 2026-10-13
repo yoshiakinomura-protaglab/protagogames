@@ -418,11 +418,16 @@ function checkStartBattleSequence() {
 
         sendMyHandStatUpdate();
 
-        triggerTurnCutin(1, () => {
-            if (gameState.p2pManager) {
-                gameState.p2pManager.startTurnTimer();
-            }
-        });
+        // ★ window.triggerTurnCutin を安全に呼び出すガード処理
+        const cutinFn = window.triggerTurnCutin || (typeof triggerTurnCutin !== 'undefined' ? triggerTurnCutin : null);
+        if (cutinFn) {
+            cutinFn(1, () => {
+                if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
+            });
+        } else {
+            // 万が一カットイン関数がなくてもタイマーだけは確実に発動して進行させる
+            if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
+        }
     }
 }
 
@@ -814,11 +819,15 @@ function proceedToNextTurn() {
     // ★ 補充された新しい手札ステータス（危険度・じゃんけん枚数）を相手へ再送信
     sendMyHandStatUpdate();
 
-    triggerTurnCutin(gameState.turn, () => {
-        if (gameState.p2pManager) {
-            gameState.p2pManager.startTurnTimer();
-        }
-    });
+    // ★ window.triggerTurnCutin を安全に呼び出すガード処理
+    const cutinFn = window.triggerTurnCutin || (typeof triggerTurnCutin !== 'undefined' ? triggerTurnCutin : null);
+    if (cutinFn) {
+        cutinFn(gameState.turn, () => {
+            if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
+        });
+    } else {
+        if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
+    }
 }
 
 function handleRematchSameDeck() {
