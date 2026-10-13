@@ -614,7 +614,8 @@ window.executeBattleSequence = async function(playerCards, cpuCards, gameState, 
     await runBattleAnimation(playerCards, cpuCards, battleResult, gameState, playSceneBGMFn);
 };
 
-// p2p_main.js や外部から直接呼べるように window へ公開
-window.triggerTurnCutin = triggerTurnCutin;
+// p2p_main.js や外部から直接呼べるように window へ一括公開
+window.executeBattleSequence = executeBattleSequence;
+window.calculateBattleResult = calculateBattleResult;
 window.getPokerHandInfo = getPokerHandInfo;
-window.triggerTurnCutin = triggerTurnCutin; // ★ この行を追加！
+window.triggerTurnCutin = triggerTurnCutin;
