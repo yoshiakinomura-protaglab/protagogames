@@ -617,3 +617,4 @@ window.executeBattleSequence = async function(playerCards, cpuCards, gameState, 
 // p2p_main.js や外部から直接呼べるように window へ公開
 window.triggerTurnCutin = triggerTurnCutin;
 window.getPokerHandInfo = getPokerHandInfo;
+window.triggerTurnCutin = triggerTurnCutin; // ★ この行を追加！
