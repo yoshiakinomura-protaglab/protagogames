@@ -1,54 +1,55 @@
-/**
- * p2p_main.js - オンラインP2P対戦専用メインモジュール (4桁部屋番号完全同期版)
- * 役割: P2P通信同期、20枚デッキハンドシェイク、毎ターンの同時カード選択、30秒タイマー、本格計算エンジン＆演出完全連動
- */
-
 // ポータブル環境用：MIMEタイプ制限を回避して依存関係付きモジュールを安全に動的ロードする関数
 async function loadGameModules() {
     try {
         const fetchAndBlob = async (path) => {
             const res = await fetch(path);
             let text = await res.text();
+            // モジュール内部の import { ... } from './xxx.js' を Blob 読み込み可能に置換
             text = text.replace(/from\s+['"]\.\/csvLoader\.js['"]/g, `from '${csvBlobUrl}'`);
             const blob = new Blob([text], { type: 'application/javascript' });
             return URL.createObjectURL(blob);
         };
 
+        // 1. 依存元となる csvLoader.js を先に Blob 化
         const csvRes = await fetch('./csvLoader.js');
         const csvText = await csvRes.text();
         const csvBlob = new Blob([csvText], { type: 'application/javascript' });
         const csvBlobUrl = URL.createObjectURL(csvBlob);
 
-        const [uiUrl, p2pNetUrl, p2pMgrUrl] = await Promise.all([
+        // 2. csvBlobUrl を使用して ui.js と cpuAi.js を Blob 化
+        const [uiUrl, cpuAiUrl] = await Promise.all([
             fetchAndBlob('./ui.js'),
-            fetchAndBlob('./p2p_network.js'),
-            fetchAndBlob('./p2p_manager.js')
+            fetchAndBlob('./cpuAi.js')
         ]);
 
-        const [csvModule, uiModule, p2pNetModule, p2pMgrModule] = await Promise.all([
+        // 3. モジュールインポート実行
+        const [csvModule, uiModule, cpuAiModule] = await Promise.all([
             import(csvBlobUrl),
             import(uiUrl),
-            import(p2pNetUrl),
-            import(p2pMgrUrl)
+            import(cpuAiUrl)
         ]);
 
         return {
             loadGameDataFromCSV: csvModule.loadGameDataFromCSV,
             renderBattleUI: uiModule.renderBattleUI,
+            renderDeckTab: uiModule.renderDeckTab,
             showToast: uiModule.showToast,
-            P2PNetwork: p2pNetModule.P2PNetwork,
-            P2PManager: p2pMgrModule.P2PManager
+            selectCpuBattleCards: cpuAiModule.selectCpuBattleCards
         };
     } catch (err) {
-        console.error("P2Pモジュールのロードに失敗しました:", err);
+        console.error("モジュールのロードに失敗しました:", err);
         return null;
     }
 }
 
 let gameModules = null;
 const INITIAL_HP = 10000;
+const STORAGE_KEY_PLAYER_DECK = 'rekishi_card_game_player_deck_v1';
+
+// ★ BGM管理用
 let bgmAudio = null;
 
+// gameState に bgmMaster を保持
 const gameState = {
     allCards: [],
     playerDeckIds: [],
@@ -60,36 +61,46 @@ const gameState = {
     cpuHand: [],
     displayMode: 'illust',
     tagMaster: {},
+    cpuDecks: [],
     jokerResults: [],
-    bgmMaster: [],
+    bgmMaster: [], // ★ 追加
     turn: 1,
     maxTurn: 5,
     playerHp: INITIAL_HP,
     cpuHp: INITIAL_HP,
     lastBattleResult: null,
-    turnHistory: [],
-    p2pNetwork: null,
-    p2pManager: null,
-
-    // マッチング管理フラグ
-    isHostMode: false,
-    currentRoomCode: null,
-    currentRoomId: null,
-    myDeckReadyData: null,
-    opponentDeckData: null,
-    myTurnChoice: null,
-    opponentTurnChoice: null,
-    myRematchRequest: false,
-    opponentRematchRequest: false,
-
-    // ★追加: 相手から受信した手札ステータス（危険度・じゃんけん枚数）
-    opponentHandStat: {
-        handPowerSum: 0,
-        gu: 0,
-        cho: 0,
-        pa: 0
-    }
+    turnHistory: [] // ★ ここを追加！
 };
+
+// ★ CSV連動版：BGM再生関数
+function playSceneBGM(bgmId, isLoop = true) {
+    if (bgmAudio) {
+        bgmAudio.pause();
+        bgmAudio = null;
+    }
+
+    // CSVデータから bgm_id を検索
+    const bgmItem = gameState.bgmMaster.find(b => (b.bgm_id || b.bgmId) === String(bgmId));
+    const fileName = bgmItem ? (bgmItem.bgm_file || bgmItem.bgmFile) : '';
+
+    // CSVになかった場合のフォールバック（yayoi_bgm.mp3）
+    const bgmPath = fileName ? `audio/${fileName}` : 'audio/yayoi_bgm.mp3';
+
+    bgmAudio = new Audio(bgmPath);
+    bgmAudio.loop = isLoop;
+    bgmAudio.volume = 0.3; // 音量 (30%)
+
+    bgmAudio.play().catch(err => {
+        console.log("BGM自動再生待ち:", err);
+    });
+}
+
+function stopEraBGM() {
+    if (bgmAudio) {
+        bgmAudio.pause();
+        bgmAudio = null;
+    }
+}
 
 const CATEGORY_CONFIG = {
     ATK: { color: "bg-rose-950/90 text-rose-300 border-rose-600", icon: "fa-hand-fist" },
@@ -101,47 +112,90 @@ const CATEGORY_CONFIG = {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function initP2PGame() {
+async function initGame() {
     gameModules = await loadGameModules();
     if (!gameModules) return;
 
     const loadedData = await gameModules.loadGameDataFromCSV();
-    if (!loadedData || !loadedData.cardsDb) return;
 
-    gameState.allCards = loadedData.cardsDb;
-    gameState.tagMaster = loadedData.tagMaster || {};
-    gameState.jokerResults = loadedData.jokerResults || [];
-    gameState.bgmMaster = loadedData.bgmMaster || [];
+    if (loadedData && loadedData.cardsDb && loadedData.cardsDb.length > 0) {
+        gameState.allCards = loadedData.cardsDb;
+        gameState.tagMaster = loadedData.tagMaster || {};
+        gameState.cpuDecks = loadedData.cpuDecks || [];
+        gameState.jokerResults = loadedData.jokerResults || [];
+        gameState.bgmMaster = loadedData.bgmMaster || []; // ★ 追加
+        
+        // 1. タイトル画面で選択した対戦設定を localStorage から取得
+        const savedConfig = localStorage.getItem('selectedBattleConfig');
+        let targetDeckId = 'd01';
+        let opponentName = '卑弥呼';
 
-    const savedConfig = localStorage.getItem('selectedBattleConfig');
-    if (savedConfig) {
-        try {
-            const config = JSON.parse(savedConfig);
-            if (config.playerDeck) {
-                const pDeck = config.playerDeck;
-                const loadedPlayerIds = [];
-                if (pDeck.jokerId) loadedPlayerIds.push(String(pDeck.jokerId));
-                if (pDeck.cardIds && Array.isArray(pDeck.cardIds)) {
-                    pDeck.cardIds.forEach(id => loadedPlayerIds.push(String(id)));
+        if (savedConfig) {
+            try {
+                const config = JSON.parse(savedConfig);
+                if (config.deckId) targetDeckId = config.deckId;
+                if (config.opponentName) opponentName = config.opponentName;
+
+                // ★ 追加：タイトル画面で選択した「編集済みプレイヤーデッキ」の読み込み
+                if (config.playerDeck) {
+                    const pDeck = config.playerDeck;
+                    const loadedPlayerIds = [];
+
+                    // JOKERを先頭（1枚目）に追加
+                    if (pDeck.jokerId) {
+                        loadedPlayerIds.push(String(pDeck.jokerId));
+                    }
+
+                    // ノーマルカード19枚を追加
+                    if (pDeck.cardIds && Array.isArray(pDeck.cardIds)) {
+                        pDeck.cardIds.forEach(id => loadedPlayerIds.push(String(id)));
+                    }
+
+                    // 20枚揃っていれば gameState に反映
+                    if (loadedPlayerIds.length === 20) {
+                        gameState.playerDeckIds = loadedPlayerIds;
+                        console.log(`自作デッキ「${pDeck.name}」を正常にバトルへ反映しました！`);
+                    }
                 }
-                if (loadedPlayerIds.length === 20) {
-                    gameState.playerDeckIds = loadedPlayerIds;
-                }
+            } catch (e) {
+                console.error("対戦設定の取得エラー:", e);
             }
-        } catch (e) {
-            console.error("対戦設定取得エラー:", e);
         }
-    }
 
-    if (!gameState.playerDeckIds || gameState.playerDeckIds.length !== 20) {
-        gameState.playerDeckIds = gameState.allCards.slice(0, 20).map(c => String(c.id));
-    }
+        // 自作デッキの設定がない場合（直接index.htmlを開いた場合など）のフォールバック
+        if (!gameState.playerDeckIds || gameState.playerDeckIds.length !== 20) {
+            const himikoDeckMaster = gameState.cpuDecks.find(d => (d.deckId || d.deck_id) === 'd01') || gameState.cpuDecks[0];
+            if (himikoDeckMaster) {
+                const leaderId = himikoDeckMaster.leaderId || himikoDeckMaster.leader_id;
+                const cardIds = himikoDeckMaster.cardIds || himikoDeckMaster.card_ids;
+                const allHimikoIds = [leaderId, ...cardIds];
+                gameState.playerDeckIds = allHimikoIds.slice(0, 20).map(id => String(id));
+            } else {
+                gameState.playerDeckIds = gameState.allCards.slice(0, 20).map(c => String(c.id));
+            }
+        }
 
-    setupEventListeners();
-    populateP2PDeckSelect();
+        try {
+            localStorage.setItem(STORAGE_KEY_PLAYER_DECK, JSON.stringify(gameState.playerDeckIds));
+        } catch (e) {}
+
+        resetGameVariables();
+
+        // 2. 選択された targetDeckId（d01, d02, d03, d04 等）でCPUデッキをセットアップ
+        setupCpuDeck(targetDeckId);
+        
+        // 3. CSV（bgm.csv）からデッキIDに応じた対戦BGMを検索して再生
+        playSceneBGM(targetDeckId, true);
+
+        setupEventListeners();
+        refreshAllUI();
+
+    } else {
+        console.error("CSVデータの読み込みに失敗しました");
+    }
 }
 
-function resetP2PGameVariables() {
+function resetGameVariables() {
     const playerFullDeck = [];
     gameState.playerDeckIds.forEach(id => {
         const card = gameState.allCards.find(c => String(c.id) === String(id));
@@ -160,394 +214,27 @@ function resetP2PGameVariables() {
     gameState.turnHistory = [];
 }
 
-// ==========================================================
-// 部屋作成（ホスト）& 部屋参加（ゲスト）ロジック
-// ==========================================================
+function setupCpuDeck(targetDeckId) {
+    const cpuDeckMaster = gameState.cpuDecks.find(d => d.deckId === targetDeckId) || gameState.cpuDecks[0];
+    
+    if (cpuDeckMaster) {
+        gameState.cpuJoker = gameState.allCards.find(c => String(c.id) === String(cpuDeckMaster.leaderId)) || gameState.allCards[0];
 
-// 1. ホスト：新しく部屋を作るボタン押下
-function handleCreateHostRoom() {
-    gameState.isHostMode = true;
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    gameState.currentRoomCode = code;
-    gameState.currentRoomId = `yamato-room-${code}`;
-
-    document.getElementById('p2p-room-select-screen')?.classList.add('hidden');
-    document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
-}
-
-// 2. ゲスト：4桁番号を入力して接続ボタン押下
-function handleJoinGuestRoom() {
-    const inputEl = document.getElementById('input-p2p-room-code');
-    const code = inputEl?.value?.trim();
-
-    if (!code || code.length !== 4 || isNaN(code)) {
-        alert("4桁の数字の部屋番号を入力してください。");
-        return;
-    }
-
-    gameState.isHostMode = false;
-    gameState.currentRoomCode = code;
-    gameState.currentRoomId = `yamato-room-${code}`;
-
-    document.getElementById('p2p-room-select-screen')?.classList.add('hidden');
-    document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
-}
-
-// 3. 待機・接続キャンセル関数
-function cancelWaitingAndReset() {
-    if (gameState.p2pNetwork) {
-        try { gameState.p2pNetwork.disconnect(); } catch(e){}
-    }
-    document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
-    document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
-    document.getElementById('p2p-room-select-screen')?.classList.remove('hidden');
-}
-
-// 4. デッキ決定ボタン押下時（実際のP2P接続確立）
-async function handleConfirmDeckSelection() {
-    const slotId = document.getElementById('p2p-deck-dropdown')?.value || 1;
-    const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
-    const decks = rawDecks ? JSON.parse(rawDecks) : {};
-    const selectedDeck = decks[slotId];
-
-    if (!selectedDeck || !selectedDeck.jokerId) {
-        alert("有効な20枚デッキを選択してください。");
-        return;
-    }
-
-    gameState.playerDeckIds = [String(selectedDeck.jokerId), ...(selectedDeck.cardIds || []).map(id => String(id))];
-    document.getElementById('p2p-deck-select-modal')?.classList.add('hidden');
-
-    gameState.myDeckReadyData = {
-        jokerId: String(selectedDeck.jokerId),
-        cardIds: (selectedDeck.cardIds || []).map(id => String(id))
-    };
-
-    const waitModal = document.getElementById('p2p-waiting-opponent-modal');
-    const waitText = document.getElementById('p2p-waiting-text');
-    const codeBox = document.getElementById('p2p-room-code-display-box');
-    const codeDisplay = document.getElementById('display-p2p-room-code');
-
-    if (waitText) waitText.innerText = "通信初期化中... ⏳";
-    if (waitModal) waitModal.classList.remove('hidden');
-
-    gameState.p2pNetwork = new gameModules.P2PNetwork();
-    gameState.p2pManager = new gameModules.P2PManager(gameState.p2pNetwork, {
-        getSelectedCards: () => gameState.selectedCardIds,
-        autoSelectRemaining: (neededCount) => {
-            const unselected = gameState.hand.filter(c => !gameState.selectedCardIds.includes(String(c.id)));
-            for (let i = 0; i < neededCount && i < unselected.length; i++) {
-                gameState.selectedCardIds.push(String(unselected[i].id));
-            }
-            updateHandCardsSelectionUI();
-            updateBattleStartButtonUI();
-            updateCalculatorUI();
-        },
-        submitTurn: () => {
-            if (gameState.selectedCardIds.length === 3 && gameState.p2pManager) {
-                hideBattleConfirmModal();
-                gameState.myTurnChoice = [...gameState.selectedCardIds];
-                gameState.p2pManager.sendTurnChoice(gameState.myTurnChoice);
-                checkExecuteTurn();
-            }
-        },
-        onOpponentDeckReady: (opponentDeck) => {
-            // 【LOG 2】（ホスト側が受信） または 【LOG 4】（ゲスト側が受信）
-            const role = gameState.isHostMode ? "ホスト" : "ゲスト";
-            console.log(`[P2P] 【LOG 2/4】[${role}] 相手のデッキを受信成功！`, opponentDeck);
-            gameState.opponentDeckData = opponentDeck;
-
-            // ホスト側の場合：ゲストのデッキを受信したら、自分のデッキを返信する【LOG 3】
-            if (gameState.isHostMode && gameState.myDeckReadyData && gameState.p2pManager) {
-                console.log("[P2P] 【LOG 3】[ホスト] ゲストへ自分のデッキを返信試行...", gameState.myDeckReadyData);
-                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-                console.log(`[P2P] 【LOG 3 結果】返信処理: ${success ? '成功' : '失敗'}`);
-            }
-
-            checkStartBattleSequence();
-        },
-        // ★追加: 相手の手札ステータス受信処理
-        onOpponentHandStatUpdate: (statData) => {
-            if (statData) {
-                gameState.opponentHandStat = statData;
-                refreshAllUI();
-            }
-        },
-        onOpponentTurnChoice: (choice) => {
-            gameState.opponentTurnChoice = choice;
-            checkExecuteTurn();
-        },
-        onOpponentRematchSame: () => {
-            gameState.opponentRematchRequest = true;
-            if (gameState.myRematchRequest) startRematchSequence();
-        },
-        onOpponentChangeDeck: () => {
-            alert("相手がデッキ選択へ戻りました。");
-            resetToDeckSelectModal();
-        }
-    });
-
-    gameState.p2pNetwork.onConnectedCallback = () => {
-        const role = gameState.isHostMode ? "ホスト" : "ゲスト";
-        console.log(`[P2P] ✅ DataChannel確立！ 役割: ${role}`);
-
-        // ゲスト側の場合：接続されたらまず自分のデッキをホストへ送信する【LOG 1】
-        if (!gameState.isHostMode) {
-            if (gameState.myDeckReadyData && gameState.p2pManager) {
-                console.log("[P2P] 【LOG 1】[ゲスト] ホストへ自分のデッキを送信試行...", gameState.myDeckReadyData);
-                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-                console.log(`[P2P] 【LOG 1 結果】送信処理: ${success ? '成功' : '失敗'}`);
-            } else {
-                console.error("[P2P] 【LOG 1 失敗】[ゲスト] デッキデータまたはp2pManagerがセットされていません。");
-            }
-        }
-    };
-
-    // 切断時の処理（ホスト切断ならリセット、ゲスト切断ならホストは待機継続）
-    gameState.p2pNetwork.onDisconnectedCallback = () => {
-        if (!gameState.p2pNetwork.isHost) {
-            alert("対戦相手（ホスト）が離脱したため、部屋作成画面に戻ります。");
-            cancelWaitingAndReset();
-        } else {
-            gameState.opponentDeckData = null;
-            if (waitText) waitText.innerText = "対戦相手が離脱しました。新しい対戦相手を待っています... ⏳";
-            if (waitModal) waitModal.classList.remove('hidden');
-        }
-    };
-
-    if (gameState.isHostMode) {
-        try {
-            await gameState.p2pNetwork.init(gameState.currentRoomId);
-            if (waitText) waitText.innerText = "対戦相手の接続を待っています...";
-            if (codeBox && codeDisplay) {
-                codeDisplay.innerText = gameState.currentRoomCode;
-                codeBox.classList.remove('hidden');
-            }
-        } catch (e) {
-            alert("この部屋番号は既に使われている可能性があります。もう一度やり直してください。");
-            cancelWaitingAndReset();
-        }
-    } else {
-        if (codeBox) codeBox.classList.add('hidden');
-        if (waitText) waitText.innerText = `部屋 【${gameState.currentRoomCode}】 へ接続中... ⏳`;
-
-        try {
-            console.log("[P2P] 1/3 ゲスト自身のPeer初期化を開始...");
-            await gameState.p2pNetwork.init();
-            
-            console.log("[P2P] 2/3 ホストへの回線開通を待機中...", gameState.currentRoomId);
-            await gameState.p2pNetwork.connectToHost(gameState.currentRoomId);
-
-            console.log("[P2P] 3/3 回線開通完了！デッキデータの送信を開始します。");
-            if (gameState.myDeckReadyData && gameState.p2pManager) {
-                const success = gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-                console.log(`[P2P] 送信処理結果: ${success ? '成功' : '失敗'}`);
-            }
-        } catch (e) {
-            console.error("[P2P] ゲスト接続フローエラー:", e);
-            alert("部屋の接続に失敗しました。番号を確認してください。");
-            cancelWaitingAndReset();
-        }
-    }
-}
-
-function populateP2PDeckSelect() {
-    const dropdown = document.getElementById('p2p-deck-dropdown');
-    if (!dropdown) return;
-
-    try {
-        const rawDecks = localStorage.getItem('yamato_縁_saved_decks_v1');
-        const decks = rawDecks ? JSON.parse(rawDecks) : {};
-        let optionsHTML = '';
-
-        for (let i = 1; i <= 10; i++) {
-            const deck = decks[i] || { id: i, name: `デッキ${i}`, jokerId: null, cardIds: [] };
-            const total = (deck.jokerId ? 1 : 0) + (deck.cardIds ? deck.cardIds.length : 0);
-            const is20 = total === 20;
-
-            optionsHTML += `
-                <option value="${i}" ${!is20 ? 'disabled' : ''}>
-                    #${i} ${deck.name} (${total}/20枚) ${!is20 ? '【未完成】' : ''}
-                </option>
-            `;
-        }
-        dropdown.innerHTML = optionsHTML;
-    } catch(e) {
-        console.error("デッキ一覧取得エラー:", e);
-    }
-}
-
-// ★追加: 自分の「手札Power合計」と「手札＋山札のじゃんけん枚数」を相手に通知する関数
-function sendMyHandStatUpdate() {
-    if (!gameState.p2pManager) return;
-
-    // 1. 手札5枚のPower合計値（危険度用）
-    const handPowerSum = gameState.hand.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
-
-    // 2. 手札＋山札のじゃんけんカウント
-    const counts = { gu: 0, cho: 0, pa: 0 };
-    const allMyCards = [
-        ...(Array.isArray(gameState.hand) ? gameState.hand : []),
-        ...(Array.isArray(gameState.deck) ? gameState.deck : [])
-    ];
-
-    allMyCards.forEach(card => {
-        if (card && counts[card.janken] !== undefined) {
-            counts[card.janken]++;
-        }
-    });
-
-    // 3. 相手へ送信
-    gameState.p2pManager.sendHandStatUpdate({
-        handPowerSum: handPowerSum,
-        gu: counts.gu,
-        cho: counts.cho,
-        pa: counts.pa
-    });
-}
-
-function checkStartBattleSequence() {
-    console.log("[P2P] 開戦チェック:", { 
-        myDeck: !!gameState.myDeckReadyData, 
-        opponentDeck: !!gameState.opponentDeckData 
-    });
-
-    // 自分のデッキデータが未送信なら再送信を試みる
-    if (gameState.myDeckReadyData && !gameState.opponentDeckData && gameState.p2pManager) {
-        gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-    }
-
-    if (gameState.myDeckReadyData && gameState.opponentDeckData) {
-        console.log("[P2P] ⚔️ 双方のデッキが揃いました！ 対戦を開始します。");
-        document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
-
-        gameState.cpuJoker = gameState.allCards.find(c => String(c.id) === String(gameState.opponentDeckData.jokerId)) || gameState.allCards[0];
-        
-        const fullCards = [];
-        const allIds = [gameState.opponentDeckData.jokerId, ...(gameState.opponentDeckData.cardIds || [])];
-        allIds.forEach(id => {
+        const allDeckIds = [cpuDeckMaster.leaderId, ...cpuDeckMaster.cardIds];
+        const fullCpuCards = [];
+        allDeckIds.forEach(id => {
             const card = gameState.allCards.find(c => String(c.id) === String(id));
-            if (card) fullCards.push({ ...card });
+            if (card) fullCpuCards.push({ ...card });
         });
 
-        const shuffled = [...fullCards].sort(() => Math.random() - 0.5);
+        const shuffled = [...fullCpuCards].sort(() => Math.random() - 0.5);
+
         gameState.cpuHand = shuffled.slice(0, 5);
         gameState.cpuDeck = shuffled.slice(5);
-
-        resetP2PGameVariables();
-        refreshAllUI();
-
-        sendMyHandStatUpdate();
-
-        triggerTurnCutin(1, () => {
-            if (gameState.p2pManager) {
-                gameState.p2pManager.startTurnTimer();
-            }
-        });
-    }
-}
-
-async function checkExecuteTurn() {
-    console.log("[P2P Check] checkExecuteTurnが呼び出されました", {
-        myChoice: gameState.myTurnChoice,
-        opponentChoice: gameState.opponentTurnChoice
-    });
-
-    if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
-        console.log("[P2P] 双方のカード選択が揃いました！ 復元・計算を開始します。");
-
-        try {
-            // 自分の選択カードを自分の手札から取得
-            const playerCards = gameState.myTurnChoice
-                .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
-                .filter(Boolean);
-
-            // 相手の選択カードを全カードDBから直接復元
-            const cpuCards = gameState.opponentTurnChoice
-                .map(id => {
-                    const found = gameState.allCards.find(c => String(c.id) === String(id));
-                    return found ? { ...found } : null;
-                })
-                .filter(Boolean);
-
-            console.log("[P2P] カード復元結果:", { playerCards, cpuCards });
-
-            if (playerCards.length !== 3 || cpuCards.length !== 3) {
-                console.error("[P2P 判定エラー] カードが3枚ずつ復元できませんでした。処理を中断します。", {
-                    playerCardsCount: playerCards.length,
-                    cpuCardsCount: cpuCards.length
-                });
-                return;
-            }
-
-            // フラグをクリア
-            gameState.myTurnChoice = null;
-            gameState.opponentTurnChoice = null;
-
-            // バトル計算
-            console.log("[P2P] calculateBattleResult を実行中...");
-            const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
-            console.log("[P2P] 計算結果:", battleResult);
-
-            gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
-            gameState.turnHistory[gameState.turn - 1] = {
-                turnNum: gameState.turn,
-                playerCards: playerCards,
-                cpuCards: cpuCards,
-                battleResult: battleResult
-            };
-
-            // アニメーション実行
-            console.log("[P2P] runBattleAnimation を実行中...");
-            await runBattleAnimation(playerCards, cpuCards, battleResult);
-            console.log("[P2P] 演出完了！");
-
-        } catch (err) {
-            console.error("[P2P Fatal Error] checkExecuteTurn 内で例外が発生しました:", err);
-        }
-    }
-}
-
-function playSceneBGM(bgmId, isLoop = true) {
-    if (bgmAudio) {
-        bgmAudio.pause();
-        bgmAudio = null;
-    }
-
-    const bgmItem = gameState.bgmMaster.find(b => (b.bgm_id || b.bgmId) === String(bgmId));
-    const fileName = bgmItem ? (bgmItem.bgm_file || bgmItem.bgmFile) : '';
-    const bgmPath = fileName ? `audio/${fileName}` : 'audio/yayoi_bgm.mp3';
-
-    bgmAudio = new Audio(bgmPath);
-    bgmAudio.loop = isLoop;
-    bgmAudio.volume = 0.3;
-
-    bgmAudio.play().catch(() => {});
-}
-
-function stopEraBGM() {
-    if (bgmAudio) {
-        bgmAudio.pause();
-        bgmAudio = null;
     }
 }
 
 function setupEventListeners() {
-    const btnCreateHost = document.getElementById('btn-create-host-room');
-    if (btnCreateHost) btnCreateHost.onclick = handleCreateHostRoom;
-
-    const btnJoinGuest = document.getElementById('btn-join-guest-room');
-    if (btnJoinGuest) btnJoinGuest.onclick = handleJoinGuestRoom;
-
-    const btnConfirmDeck = document.getElementById('btn-p2p-confirm-deck');
-    if (btnConfirmDeck) btnConfirmDeck.onclick = () => { handleConfirmDeckSelection(); };
-
-    const btnDeckCancel = document.getElementById('btn-p2p-deck-cancel');
-    if (btnDeckCancel) btnDeckCancel.onclick = cancelWaitingAndReset;
-
-    const btnCancelWait = document.getElementById('btn-cancel-waiting');
-    if (btnCancelWait) btnCancelWait.onclick = cancelWaitingAndReset;
-
     const toggleImgBtn = document.getElementById('btn-toggle-img-mode') || document.getElementById('img-mode-toggle');
     if (toggleImgBtn) {
         toggleImgBtn.onclick = () => {
@@ -565,21 +252,11 @@ function setupEventListeners() {
         };
     }
 
-    const btnRematchSame = document.getElementById('btn-p2p-rematch-same');
-    if (btnRematchSame) btnRematchSame.onclick = handleRematchSameDeck;
-
-    const btnChangeDeck = document.getElementById('btn-p2p-change-deck');
-    if (btnChangeDeck) btnChangeDeck.onclick = handleRematchChangeDeck;
-
     const confirmBtn = document.getElementById('btn-modal-confirm');
     if (confirmBtn) {
         confirmBtn.onclick = () => {
             hideBattleConfirmModal();
-            if (gameState.p2pManager) {
-                gameState.myTurnChoice = [...gameState.selectedCardIds];
-                gameState.p2pManager.sendTurnChoice(gameState.myTurnChoice);
-                checkExecuteTurn();
-            }
+            handleBattleStart();
         };
     }
 
@@ -597,34 +274,87 @@ function setupEventListeners() {
         nextTurnBtn.onclick = proceedToNextTurn;
     }
 
+    const restartBtn = document.getElementById('btn-result-restart');
+    if (restartBtn) {
+        restartBtn.onclick = () => {
+            hideGameResultModal();
+
+            // 選択されていた敵デッキIDを localStorage から取得
+            const savedConfig = localStorage.getItem('selectedBattleConfig');
+            let targetDeckId = 'd01';
+            if (savedConfig) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    if (config.deckId) targetDeckId = config.deckId;
+                } catch(e) {}
+            }
+
+            resetGameVariables();
+            setupCpuDeck(targetDeckId); // ★ 選択していた敵デッキで再セットアップ
+            playSceneBGM(targetDeckId, true); // ★ 選択していた対戦BGMを再生
+
+            refreshAllUI();
+            triggerTurnCutin(1);
+        };
+    }
+
+    // ★ 追加1：タイトルに戻るボタンのイベントリスナー（BGMを停止してタイトル画面へ）
     const titleBtn = document.getElementById('btn-result-title');
     if (titleBtn) {
         titleBtn.onclick = () => {
-            stopEraBGM();
-            sessionStorage.removeItem('isP2PMatch');
+            stopEraBGM(); // BGM停止
             window.location.href = 'title.html';
         };
     }
 
+    // ★ BGM再生ブロック解除用オーバーレイ（タップ時の確実な開戦処理）
     const audioOverlay = document.getElementById('battle-start-audio-overlay');
     if (audioOverlay) {
         audioOverlay.onclick = () => {
+            // 1. オーバーレイを消去
             audioOverlay.classList.add('opacity-0', 'pointer-events-none');
-            setTimeout(() => { try { audioOverlay.remove(); } catch(e) {} }, 500);
-            playSceneBGM('d01', true);
-            setTimeout(() => { triggerTurnCutin(1); }, 200);
+            setTimeout(() => {
+                try { audioOverlay.remove(); } catch(e) {}
+            }, 500);
+
+            // 2. CSV連動BGM再生の発火
+            try {
+                const savedConfig = localStorage.getItem('selectedBattleConfig');
+                let targetDeckId = 'd01';
+                if (savedConfig) {
+                    const config = JSON.parse(savedConfig);
+                    if (config.deckId) targetDeckId = config.deckId;
+                }
+                playSceneBGM(targetDeckId, true);
+            } catch(e) {
+                console.error("BGM再生エラー:", e);
+            }
+
+            // 3. 「第１陣 開始！」カットイン演出の発火
+            setTimeout(() => {
+                triggerTurnCutin(1);
+            }, 200);
         };
     }
 
     document.removeEventListener('click', handleCardClick);
     document.addEventListener('click', handleCardClick);
+
+    const tabs = ['battle', 'deck', 'gacha', 'versus'];
+    tabs.forEach(tabName => {
+        const btn = document.getElementById(`tab-${tabName}-btn`);
+        if (btn) btn.onclick = () => switchTab(tabName);
+    });
 }
+
 
 function handleCardClick(e) {
     const cardElement = e.target.closest('#player-hand-container .card-container');
     if (cardElement) {
         const cardId = cardElement.getAttribute('data-id');
-        if (cardId) toggleCardSelection(String(cardId));
+        if (cardId) {
+            toggleCardSelection(String(cardId));
+        }
     }
 }
 
@@ -642,15 +372,20 @@ function toggleCardSelection(cardId) {
         }
     }
 
+    // ★ 画像を壊さず、CSSクラス（見た目）だけを切り替える
     updateHandCardsSelectionUI();
+
+    // ★ ボタンの文言と上部計算機だけを更新
     updateBattleStartButtonUI();
     updateCalculatorUI();
 }
 
+// ★ 手札カードの選択・未選択の見た目（CSSクラス）だけを高速に切り替える関数
 function updateHandCardsSelectionUI() {
     const handContainer = document.getElementById('player-hand-container');
     if (!handContainer) return;
 
+    // 手札エリアにある全てのカード要素を取得
     const cards = handContainer.querySelectorAll('.card-container');
 
     cards.forEach(cardEl => {
@@ -658,15 +393,18 @@ function updateHandCardsSelectionUI() {
         const isSelected = gameState.selectedCardIds.includes(String(id));
 
         if (isSelected) {
+            // 選択時：暗さを解除して、青く光らせるクラスをセット
             cardEl.classList.remove('border-slate-800/80', 'brightness-50', 'opacity-60', 'grayscale-[30%]');
             cardEl.classList.add('border-cyan-300', 'ring-4', 'ring-cyan-400/80', 'card-selected-style', 'brightness-100', 'opacity-100');
         } else {
+            // 未選択時：青い光を外して、薄暗くするクラスをセット
             cardEl.classList.remove('border-cyan-300', 'ring-4', 'ring-cyan-400/80', 'card-selected-style', 'brightness-100', 'opacity-100');
             cardEl.classList.add('border-slate-800/80', 'brightness-50', 'opacity-60', 'grayscale-[30%]');
         }
     });
 }
 
+// ★ 戦闘開始ボタンの状態だけを更新する関数
 function updateBattleStartButtonUI() {
     const battleStartBtn = document.getElementById('btn-battle-start');
     if (!battleStartBtn) return;
@@ -674,7 +412,7 @@ function updateBattleStartButtonUI() {
 
     if (selectedCount === 3) {
         battleStartBtn.disabled = false;
-        battleStartBtn.innerText = "⚔️ 戦闘決定！";
+        battleStartBtn.innerText = "⚔️ 戦闘開始！";
         battleStartBtn.className = "w-full py-2.5 sm:py-3 px-5 rounded-xl text-sm sm:text-base font-black bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 shadow-lg shadow-amber-950/80 border border-amber-300 cursor-pointer";
     } else {
         battleStartBtn.disabled = true;
@@ -687,12 +425,14 @@ function showBattleConfirmModal() {
     const modal = document.getElementById('battle-confirm-modal');
     if (!modal) return;
 
+    // 1. 選択カードデータの取得
     const selectedCards = gameState.selectedCardIds
         .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
         .filter(Boolean);
 
     if (selectedCards.length !== 3) return;
 
+    // ① カード3枚のミニカード（画像 ＋ 強調名前）
     const cardsContainer = document.getElementById('modal-confirm-card-list');
     if (cardsContainer) {
         cardsContainer.innerHTML = selectedCards.map(c => {
@@ -702,20 +442,29 @@ function showBattleConfirmModal() {
                     <div class="w-full aspect-[3/4] bg-slate-900 rounded-lg overflow-hidden border border-amber-400/80 mb-1.5 shadow-md">
                         <img src="images/${imgName}" class="w-full h-full object-cover object-top" onerror="this.src='images/default.jpg';">
                     </div>
+                    <!-- Pwr表示を削除し、フォントサイズを拡大（text-sm sm:text-base） -->
                     <div class="text-sm sm:text-base font-nomal text-white-300 truncate w-full text-center leading-tight font-yuji">${c.name}</div>
                 </div>
             `;
         }).join('');
     }
 
+    // ② じゃんけん最終判定手 ＆ トランプ役
     const counts = { gu: 0, cho: 0, pa: 0 };
     selectedCards.forEach(c => { if (counts[c.janken] !== undefined) counts[c.janken]++; });
 
     let finalHandIcon = '❓';
-    if (counts.gu === 3 || counts.gu === 2) finalHandIcon = '✊';
-    else if (counts.cho === 3 || counts.cho === 2) finalHandIcon = '✌️';
-    else if (counts.pa === 3 || counts.pa === 2) finalHandIcon = '✋';
-    else if (counts.gu === 1 && counts.cho === 1 && counts.pa === 1) finalHandIcon = '✨';
+    let finalHandLabel = 'なし';
+
+    if (counts.gu === 3 || counts.gu === 2) {
+        finalHandIcon = '✊';
+    } else if (counts.cho === 3 || counts.cho === 2) {
+        finalHandIcon = '✌️';
+    } else if (counts.pa === 3 || counts.pa === 2) {
+        finalHandIcon = '✋';
+    } else if (counts.gu === 1 && counts.cho === 1 && counts.pa === 1) {
+        finalHandIcon = '✨';
+    }
 
     const pokerInfo = getPokerHandInfo(selectedCards);
 
@@ -724,6 +473,7 @@ function showBattleConfirmModal() {
     if (jankenEl) jankenEl.innerText = finalHandIcon;
     if (pokerEl) pokerEl.innerText = pokerInfo.name;
 
+    // ③ 発動特性（計算機と同等の倍率算出 ＆ 最大6個表示）
     let baseMultSum = 1.0;
     let atkMultSum = 1.0;
     let defMultSum = 1.0;
@@ -772,6 +522,7 @@ function showBattleConfirmModal() {
             `);
         });
 
+        // 6枠埋まるまで空枠で固定（min-h-[36px] に統一）
         while (slotsHTML.length < 6) {
             slotsHTML.push(`<div class="rounded-lg border border-slate-800/40 bg-slate-950/20 min-h-[36px]"></div>`);
         }
@@ -779,6 +530,7 @@ function showBattleConfirmModal() {
         tagsContainer.innerHTML = slotsHTML.slice(0, 6).join('');
     }
 
+    // ④ じゃんけん・デバフ除外 予測 ATK ｜ DEF
     const basePowerSum = selectedCards.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
     const pokerMult = pokerInfo.multiplier;
 
@@ -790,6 +542,7 @@ function showBattleConfirmModal() {
     if (atkEl) atkEl.innerText = totalAtk.toLocaleString();
     if (defEl) defEl.innerText = totalDef.toLocaleString();
 
+    // モーダル表示
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
 }
@@ -797,12 +550,38 @@ function showBattleConfirmModal() {
 function hideBattleConfirmModal() {
     const modal = document.getElementById('battle-confirm-modal');
     if (modal) {
-        modal.style.display = 'none';
+        modal.style.display = 'none'; // ★ インラインの display: flex を直接上書きして消去
         modal.classList.add('hidden');
     }
 }
 
+async function handleBattleStart() {
+    if (gameState.selectedCardIds.length !== 3) return;
+
+    const playerCards = gameState.selectedCardIds
+        .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
+        .filter(Boolean);
+
+    // ★ gameModules 経由で呼び出し
+    const cpuCards = gameModules.selectCpuBattleCards(gameState.cpuHand, gameState.tagMaster);
+    const battleResult = calculateBattleResult(playerCards, cpuCards, gameState.tagMaster);
+    
+    gameState.lastBattleResult = { playerCards, cpuCards, battleResult };
+
+    // 各ターンの結果を記憶
+    gameState.turnHistory[gameState.turn - 1] = {
+        turnNum: gameState.turn,
+        playerCards: playerCards,
+        cpuCards: cpuCards,
+        battleResult: battleResult
+    };
+
+    // ★ この1行（runBattleAnimation の呼び出し）が必要です
+    await runBattleAnimation(playerCards, cpuCards, battleResult);
+}
+
 async function runBattleAnimation(playerCards, cpuCards, battleResult) {
+    // ★ ① 手札がリセットされる前に、計算機画面の数値（Ground Truth）を一番最初に退避・取得する！
     const calcAtkText = document.getElementById('calc-total-atk')?.innerText.replace(/,/g, '') || '0';
     const calcDefText = document.getElementById('calc-total-def')?.innerText.replace(/,/g, '') || '0';
     const calcAtkVal = parseInt(calcAtkText, 10);
@@ -820,11 +599,17 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
     refreshAllUI();
     await sleep(200);
 
+    // ホワイトアウト解除
     if (whiteout) {
         whiteout.classList.remove('opacity-100', 'pointer-events-auto');
         whiteout.classList.add('opacity-0', 'pointer-events-none');
     }
 
+    // -------------------------------------------------------------
+    // ★ 2. 実際のバトル結果（battleResult）から演出用オブジェクトを動的に構築
+    // -------------------------------------------------------------
+    
+    // 敵カード3枚の画像・名前抽出
     const formattedCpuCards = cpuCards.map(c => {
         const img = (gameState.displayMode === 'real' ? c.imageReal : c.imageIllust) || `${c.id}_illust.jpg`;
         return {
@@ -833,18 +618,35 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         };
     });
 
+    // 実際に発動した敵の特性タグリストの抽出（①倍率が低い順 ➔ ②同倍率はカテゴリ順［GEN/SUP ➔ ATK ➔ DEF ➔ DEB］）
     const rawTagDetails = battleResult.cpu.tagDetails || [];
-    const categoryPriority = { GEN: 1, SUP: 2, ATK: 3, DEF: 4, DEB: 5 };
 
+    // カテゴリごとの優先順位を定義（数値が小さいほど優先）
+    const categoryPriority = {
+        GEN: 1, // 時代・汎用
+        SUP: 2, // サポート
+        ATK: 3, // 攻撃
+        DEF: 4, // 防御
+        DEB: 5  // デバフ
+    };
+
+    // 2段階ソートの実行
     const sortedTagDetails = [...rawTagDetails].sort((a, b) => {
         const multA = a.mult || 1.0;
         const multB = b.mult || 1.0;
-        if (multA !== multB) return multA - multB;
+
+        // 1. まず倍率が異なる場合は、倍率が低い順（昇順）
+        if (multA !== multB) {
+            return multA - multB;
+        }
+
+        // 2. 倍率が同じだった場合は、指定のカテゴリ順で並べる
         const pA = categoryPriority[a.category] || 99;
         const pB = categoryPriority[b.category] || 99;
         return pA - pB;
     });
 
+    // リアルタイムで倍率を掛け合わせながら formattedTags を構築
     let runningAtkMult = 1.0;
     let runningDefMult = 1.0;
 
@@ -853,13 +655,17 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         const mult = t.mult || 1.0;
         const category = t.category || 'GEN';
 
-        if (category === 'ATK') runningAtkMult *= mult;
-        else if (category === 'DEF') runningDefMult *= mult;
-        else if (category === 'GEN' || category === 'SUP') {
+        // カテゴリに応じて累積倍率を計算
+        if (category === 'ATK') {
+            runningAtkMult *= mult;
+        } else if (category === 'DEF') {
+            runningDefMult *= mult;
+        } else if (category === 'GEN' || category === 'SUP') {
             runningAtkMult *= mult;
             runningDefMult *= mult;
         }
 
+        // 場に出ている敵カード3枚の中から、このタグ(tagName)を持っているカードのインデックスを抽出
         const matchingIndexes = [];
         cpuCards.forEach((card, index) => {
             if (!card) return;
@@ -876,7 +682,9 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
                 return clean === tagName.trim();
             });
 
-            if (hasTag) matchingIndexes.push(index);
+            if (hasTag) {
+                matchingIndexes.push(index);
+            }
         });
 
         const targetIdxs = matchingIndexes.length > 0 ? matchingIndexes : [0, 1, 2];
@@ -885,20 +693,23 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
             name: t.name,
             category: category,
             targetIndexes: targetIdxs,
-            atkMult: runningAtkMult,
-            defMult: runningDefMult
+            atkMult: runningAtkMult, // その時点での累積ATK倍率
+            defMult: runningDefMult  // その時点での累積DEF倍率
         };
     });
 
+    // ① 特性タグのみの最終積算倍率（ポーカー役・じゃんけん適用前）
     const tagTotalAtkMult = runningAtkMult;
     const tagTotalDefMult = runningDefMult;
 
+    // ② 特性タグ総積算 ✕ ポーカー役倍率
     const cpuPokerInfo = battleResult.cpu.pokerInfo || { name: '役なし', multiplier: 1.0 };
     const pokerMult = cpuPokerInfo.multiplier || 1.0;
 
     const afterPokerAtkMult = tagTotalAtkMult * pokerMult;
     const afterPokerDefMult = tagTotalDefMult * pokerMult;
 
+    // 敵軍ポーカー演出用オブジェクト
     const cpuPokerData = {
         name: cpuPokerInfo.name,
         multiplier: pokerMult,
@@ -906,10 +717,12 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         defMult: afterPokerDefMult
     };
 
+    // ③ 特性タグ総積算 ✕ ポーカー役倍率 ✕ じゃんけん倍率
     const cpuJankenMult = battleResult.cpu.jankenMult || 1.0;
     const afterJankenAtkMult = afterPokerAtkMult * cpuJankenMult;
     const afterJankenDefMult = afterPokerDefMult * cpuJankenMult;
 
+    // 実際のじゃんけん結果データ（引き分け時も必ず演出へ渡す！）
     const jankenData = {
         title: `✊ VS ✌️ じゃんけん結果：${battleResult.jankenResultText || '勝負'}`,
         sub: `自軍補正 ×${battleResult.player.jankenMult} / 敵軍補正 ×${battleResult.cpu.jankenMult}`,
@@ -917,41 +730,56 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         defMult: afterJankenDefMult
     };
 
+    // 自軍・敵軍のデバフタグリストを抽出
     const playerDebuffList = (battleResult.player.tagDetails || []).filter(t => t.category === 'DEB');
     const enemyDebuffList = (battleResult.cpu.tagDetails || []).filter(t => t.category === 'DEB');
 
+    // ④ 特性タグ総積算 ✕ ポーカー役倍率 ✕ じゃんけん倍率 ✕ 味方デバフ倍率
     const playerDebMultToCpu = battleResult.player.debMultToEnemy || 1.0;
     const afterDebuffAtkMult = afterJankenAtkMult * playerDebMultToCpu;
     const afterDebuffDefMult = afterJankenDefMult * playerDebMultToCpu;
 
+// ★ 1. 演出再生前に決着判定を行う！
     const isGameOver = (
         gameState.playerHp - battleResult.cpu.damageGiven <= 0 ||
         gameState.cpuHp - battleResult.player.damageGiven <= 0 ||
         gameState.turn >= gameState.maxTurn
     );
-
+    
+    // 動的演出オブジェクトの組み立て
     const animData = {
         cpuCards: formattedCpuCards,
         enemyBaseAtk: battleResult.cpu.basePowerSum,
         enemyBaseDef: battleResult.cpu.basePowerSum,
         tags: formattedTags,
-        poker: cpuPokerData,
+        poker: cpuPokerData, // ★ 追加：アニメ演出側へポーカー役データを渡す
         janken: jankenData,
+        
+        // デバフ詳細データ
         playerDebuffs: playerDebuffList.map(d => ({ name: d.name, mult: d.mult })),
         enemyDebuffs: enemyDebuffList.map(d => ({ name: d.name, mult: d.mult })),
+        
+        // 自軍数値
         playerBaseAtk: calcAtkVal,
         playerBaseDef: calcDefVal,
+        // ★【追加】じゃんけん補正常算直後（デバフ適用前）の自軍中間ステータスを算出！
         playerAfterJankenAtk: Math.round(calcAtkVal * (battleResult.player.jankenMult || 1.0)),
         playerAfterJankenDef: Math.round(calcDefVal * (battleResult.player.jankenMult || 1.0)),
+        // 最終確定数値（デバフ適用後）
         playerAtk: battleResult.player.finalAtk,
         playerDef: battleResult.player.finalDef,
+
+        // 敵軍数値（デバフ適用後の最終倍率＆最終確定ステータス）
         enemyAfterDebuffAtkMult: afterDebuffAtkMult,
         enemyAfterDebuffDefMult: afterDebuffDefMult,
         enemyFinalAtk: battleResult.cpu.finalAtk,
         enemyFinalDef: battleResult.cpu.finalDef,
-        isGameOver: isGameOver
+        isGameOver: isGameOver // ★【追加】演出側へ決着フラグを渡す！
     };
 
+    // -------------------------------------------------------------
+    // ★ 3. ド派手演出を再生！（黒渦が画面を覆うまで非同期で待機）
+    // -------------------------------------------------------------
     let retryCount = 0;
     while (!window.battleAnim && retryCount < 10) {
         await sleep(100);
@@ -960,15 +788,20 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
 
     if (window.battleAnim) {
         await window.battleAnim.play(animData);
+    } else {
+        console.warn("window.battleAnim が見つからないため演出をスキップします");
     }
 
+    // 古いリザルトの残像を事前消去
     const turnResultModal = document.getElementById('turn-result-modal');
     if (turnResultModal) turnResultModal.classList.add('hidden');
 
     if (isGameOver) {
+        // --- 【決着ターン】：アニメ側で100%真っ白になった裏で1枚絵をセット ➔ 白幕を晴らす ---
+        
         gameState.playerHp = Math.max(0, gameState.playerHp - battleResult.cpu.damageGiven);
         gameState.cpuHp = Math.max(0, gameState.cpuHp - battleResult.player.damageGiven);
-
+        
         let resultType = 'win_normal';
         if (gameState.cpuHp <= 0) resultType = 'win_perfect';
         else if (gameState.playerHp <= 0) resultType = 'lose_perfect';
@@ -977,16 +810,21 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
 
         playSceneBGM(resultType, true);
 
+        // 1. 真っ白（透過率0%）の裏で1枚絵モーダルを安全にセットアップ
         showGameResultCutin(resultType);
         await sleep(200);
 
+        // 2. 白幕（.whiteout-transition-overlay）をゆっくり晴らして1枚絵へ着地！
         const whiteOverlay = document.querySelector('.whiteout-transition-overlay');
         if (whiteOverlay) {
             whiteOverlay.style.opacity = '0';
             await sleep(500);
             whiteOverlay.remove();
         }
+
     } else {
+        // --- 【通常ターン】：黒渦の中で手札・背景更新 ＆ リザルト用意 ➔ 黒渦が晴れる ---
+        
         let sumiEl = document.querySelector('.sumi-arashi-overlay');
         if (!sumiEl) {
             sumiEl = document.createElement('div');
@@ -996,6 +834,7 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
         }
 
         showTurnResultModal(playerCards, cpuCards, battleResult);
+
         await sleep(200);
 
         sumiEl.style.transition = 'opacity 0.4s ease-out';
@@ -1005,11 +844,51 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult) {
     }
 }
 
+function renderAnimCardSetHTML(cards, isOpen, isPlayer) {
+    if (!cards || cards.length < 3) return '';
+
+    const margins = isPlayer 
+        ? ["ml-0", "ml-8 sm:ml-12", "ml-0"]
+        : ["mr-0", "mr-8 sm:mr-12", "mr-0"];
+
+    return cards.map((card, i) => {
+        const offsetClass = margins[i] || "";
+
+        if (!isOpen) {
+            return `
+                <div class="w-32 sm:w-44 aspect-[3/4] bg-slate-900 border-2 border-slate-700/80 rounded-xl p-2 text-center shadow-2xl flex flex-col items-center justify-center ${offsetClass}">
+                    <i class="fa-solid fa-shield-cat text-3xl text-slate-600 mb-2"></i>
+                    <div class="text-xs font-bold text-slate-500 tracking-widest">伏せカード</div>
+                </div>
+            `;
+        }
+
+        const imgName = gameState.displayMode === 'real'
+            ? (card.imageReal || card.image_real || 'c00000_real.jpg')
+            : (card.imageIllust || card.image_illust || 'c00000_illust.jpg');
+
+        return `
+            <div class="w-32 sm:w-44 aspect-[3/4] bg-slate-950 border-2 border-amber-500/90 rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(245,158,11,0.3)] flex flex-col justify-between ${offsetClass} transform hover:scale-105 transition-all">
+                <div class="relative flex-1 w-full bg-slate-900 overflow-hidden">
+                    <img src="images/${imgName}" class="w-full h-full object-cover object-top" onerror="this.src='images/default.jpg';">
+                    <div class="absolute bottom-1 right-1 bg-slate-950/90 border border-amber-400 text-amber-300 font-mono text-xs sm:text-sm px-2 py-0.5 font-black rounded-md shadow-md">
+                        ${card.power || 0}
+                    </div>
+                </div>
+                <div class="p-1 sm:p-1.5 bg-slate-950 border-t border-slate-800 text-center">
+                    <div class="text-xs sm:text-sm font-bold text-slate-100 truncate font-yuji">${card.name}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex = null) {
     const modal = document.getElementById('turn-result-modal');
     if (!modal) return;
     modal.style.zIndex = '900000';
 
+    // 表示するターン履歴のデータを切り替える（指定がなければ一番新しいターン）
     const targetTurnIdx = viewTurnIndex !== null ? viewTurnIndex : (gameState.turnHistory.length - 1);
     const historyData = gameState.turnHistory[targetTurnIdx];
 
@@ -1017,6 +896,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
     const currentCCards = historyData ? historyData.cpuCards : cpuCards;
     const currentResult = historyData ? historyData.battleResult : battleResult;
 
+    // 安全に innerHTML / innerText をセットするヘルパー関数
     const setSafeHTML = (id, html) => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = html;
@@ -1026,6 +906,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
         if (el) el.innerText = text;
     };
 
+    // 1. 参戦者 (画像＋名前)
     const renderMiniCards = (cards) => cards.map(c => {
         const img = (gameState.displayMode === 'real' ? c.imageReal : c.imageIllust) || `${c.id}_illust.jpg`;
         return `
@@ -1041,12 +922,15 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
     setSafeHTML('res-p-cards', renderMiniCards(currentPCards));
     setSafeHTML('res-c-cards', renderMiniCards(currentCCards));
 
+    // 2. 有名度合計
     setSafeText('res-p-power', currentResult.player.basePowerSum.toLocaleString());
     setSafeText('res-c-power', currentResult.cpu.basePowerSum.toLocaleString());
 
+    // 3. ポーカー役
     setSafeText('res-p-poker', `${currentResult.player.pokerInfo.name}`);
     setSafeText('res-c-poker', `${currentResult.cpu.pokerInfo.name}`);
 
+    // 4. カテゴリ別 発動特性リスト描画
     const renderCategoryRows = (catKey) => {
         const pTags = currentResult.player.tagDetails ? currentResult.player.tagDetails.filter(t => t.category === catKey) : [];
         const cTags = currentResult.cpu.tagDetails ? currentResult.cpu.tagDetails.filter(t => t.category === catKey) : [];
@@ -1081,6 +965,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
     setSafeHTML('res-list-sup', renderCategoryRows('SUP'));
     setSafeHTML('res-list-deb', renderCategoryRows('DEB'));
 
+    // 5. 中間数値 (特性適用後)
     const midPAtk = Math.round(currentResult.player.basePowerSum * currentResult.player.genSupMult * currentResult.player.atkMult * currentResult.player.pokerMult);
     const midPDef = Math.round(currentResult.player.basePowerSum * currentResult.player.genSupMult * currentResult.player.defMult * currentResult.player.pokerMult);
     const midCAtk = Math.round(currentResult.cpu.basePowerSum * currentResult.cpu.genSupMult * currentResult.cpu.atkMult * currentResult.cpu.pokerMult);
@@ -1091,10 +976,12 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
     setSafeText('res-mid-c-atk', midCAtk.toLocaleString());
     setSafeText('res-mid-c-def', midCDef.toLocaleString());
 
+    // 6. じゃんけん補正
     setSafeText('res-janken-text', currentResult.jankenResultText);
     setSafeText('res-p-janken-mult', `自軍補正: x${currentResult.player.jankenMult}`);
     setSafeText('res-c-janken-mult', `敵軍補正: x${currentResult.cpu.jankenMult}`);
 
+    // 7. 最終数値 ＆ ダメージ
     setSafeText('res-final-p-atk', currentResult.player.finalAtk.toLocaleString());
     setSafeText('res-final-p-def', currentResult.player.finalDef.toLocaleString());
     setSafeText('res-final-c-atk', currentResult.cpu.finalAtk.toLocaleString());
@@ -1103,14 +990,15 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
     setSafeText('res-damage-given-cpu', currentResult.player.damageGiven.toLocaleString());
     setSafeText('res-damage-given-player', currentResult.cpu.damageGiven.toLocaleString());
 
+    // ★ 右側の第1陣〜最終決戦の切替ボタンを描画
     const tabContainer = document.getElementById('result-turn-tab-container');
     if (tabContainer) {
         const turnLabels = ["第１陣", "第２陣", "第３陣", "第４陣", "最終決戦"];
         let tabsHTML = '';
 
         for (let i = 0; i < 5; i++) {
-            const hasData = i < gameState.turnHistory.length;
-            const isSelected = i === targetTurnIdx;
+            const hasData = i < gameState.turnHistory.length; // プレイ済みのターンか？
+            const isSelected = i === targetTurnIdx;           // 今画面で見ているターンか？
 
             let btnStyle = "";
             if (isSelected) {
@@ -1125,7 +1013,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
                 <button 
                     onclick="window.switchResultTurnTab(${i})" 
                     ${!hasData ? 'disabled' : ''} 
-                    class="w-full min-h-[32px] py-1.5 px-1 rounded-xl border text-[10px] sm:text-xs font-yuji transition-all text-center flex-shrink-0 flex items-center justify-center ${btnStyle}">
+                    class="w-full py-2 px-1 rounded-xl border text-[10px] sm:text-xs font-yuji transition-all text-center ${btnStyle}">
                     ${turnLabels[i]}
                 </button>
             `;
@@ -1133,6 +1021,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
         tabContainer.innerHTML = tabsHTML;
     }
 
+    // ボタンの文字切替（最後か途中か）
     const nextBtn = document.getElementById('btn-next-turn');
     if (nextBtn) {
         const isGameOver = (
@@ -1151,6 +1040,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, viewTurnIndex 
     modal.classList.remove('hidden');
 }
 
+// ★ 右側ボタンを押した時に過去の画面を呼び出す関数
 window.switchResultTurnTab = function(turnIndex) {
     if (gameState.turnHistory[turnIndex]) {
         const data = gameState.turnHistory[turnIndex];
@@ -1161,6 +1051,7 @@ window.switchResultTurnTab = function(turnIndex) {
 function proceedToNextTurn() {
     const modal = document.getElementById('turn-result-modal');
     
+    // ★ 最終決戦（HP0または5ターン終了）でリザルトを見ていた場合 ➔ 一枚絵へ戻る
     const isGameOver = (
         gameState.playerHp <= 0 || 
         gameState.cpuHp <= 0 || 
@@ -1168,57 +1059,55 @@ function proceedToNextTurn() {
     );
 
     if (isGameOver) {
+        // レシートを閉じるだけで、一枚絵＋3ボタン画面へ復帰
         if (modal) modal.classList.add('hidden');
         return;
     }
 
+    // --- 通常ターンの処理 ---
     if (modal) modal.classList.add('hidden');
 
     if (!gameState.lastBattleResult) return;
-    const { battleResult, playerCards } = gameState.lastBattleResult;
+    const { battleResult, playerCards, cpuCards } = gameState.lastBattleResult;
 
-    // HP更新
     gameState.playerHp = Math.max(0, gameState.playerHp - battleResult.cpu.damageGiven);
     gameState.cpuHp = Math.max(0, gameState.cpuHp - battleResult.player.damageGiven);
 
-    // 使用カードを手札から取り除き、山札からドローして5枚に補充
     const pUsedSet = new Set(playerCards.map(c => String(c.id || c.cardId)));
     gameState.hand = gameState.hand.filter(c => !pUsedSet.has(String(c.id || c.cardId)));
 
-    while (gameState.hand.length < 5 && gameState.deck.length > 0) {
-        gameState.hand.push(gameState.deck.shift());
-    }
+    const cUsedSet = new Set(cpuCards.map(c => String(c.id || c.cardId)));
+    gameState.cpuHand = gameState.cpuHand.filter(c => !cUsedSet.has(String(c.id || c.cardId)));
+
+    while (gameState.hand.length < 5 && gameState.deck.length > 0) gameState.hand.push(gameState.deck.shift());
+    while (gameState.cpuHand.length < 5 && gameState.cpuDeck.length > 0) gameState.cpuHand.push(gameState.cpuDeck.shift());
 
     gameState.turn += 1;
     refreshAllUI();
-
-    // ★ 補充された新しい手札ステータス（危険度・じゃんけん枚数）を相手へ再送信
-    sendMyHandStatUpdate();
-
-    triggerTurnCutin(gameState.turn, () => {
-        if (gameState.p2pManager) {
-            gameState.p2pManager.startTurnTimer();
-        }
-    });
+    triggerTurnCutin(gameState.turn);
 }
 
+// ==========================================
+// ★ 勝敗1枚絵カットイン表示関数 (ホワイトアウト＆ズーム演出完全版)
+// ==========================================
 function showGameResultCutin() {
     const modal = document.getElementById('game-result-cutin-modal');
     const cutinImg = document.getElementById('result-cutin-img');
     const toResultBtn = document.getElementById('btn-cutin-to-result');
+    const restartBtn = document.getElementById('btn-cutin-restart');
     const titleBtn = document.getElementById('btn-cutin-title');
 
     if (!modal || !cutinImg) return;
 
+    // 1. 自軍JOKERのID取得 ＆ 勝敗タイプの判定
     const playerJokerId = gameState.playerDeckIds[0] || 'c00000';
     let resultType = 'win_normal';
-    
-    if (gameState.playerHp > gameState.cpuHp) {
-        resultType = gameState.cpuHp <= 0 ? 'win_perfect' : 'win_normal';
-    } else {
-        resultType = gameState.playerHp <= 0 ? 'lose_perfect' : 'lose_normal';
-    }
+    if (gameState.cpuHp <= 0) resultType = 'win_perfect';
+    else if (gameState.playerHp <= 0) resultType = 'lose_perfect';
+    else if (gameState.playerHp > gameState.cpuHp) resultType = 'win_normal';
+    else resultType = 'lose_normal';
 
+    // 2. 画像のセット
     const jokerSetting = gameState.jokerResults.find(r => (r.joker_id || r.jokerId) === String(playerJokerId));
     let fileName = jokerSetting ? (jokerSetting[resultType] || '') : '';
     const imagePath = fileName ? `images/${fileName}` : `images/himiko_${resultType}.jpg`;
@@ -1226,6 +1115,7 @@ function showGameResultCutin() {
     cutinImg.src = imagePath;
     cutinImg.onerror = () => { cutinImg.src = 'images/default.jpg'; };
 
+    // 一枚絵の表示（★ 白幕 z-index:999999 のすぐ裏 z-index:800000 に展開）
     modal.style.zIndex = '800000';
     modal.classList.remove('hidden');
     requestAnimationFrame(() => {
@@ -1233,10 +1123,43 @@ function showGameResultCutin() {
         modal.classList.add('active');
     });
 
+    // --------------------------------------------------
+    // ボタンのイベント接続
+    // --------------------------------------------------
+
+    // 再戦するボタン
+    if (restartBtn) {
+        restartBtn.onclick = () => {
+            modal.classList.remove('active');
+            modal.classList.add('opacity-0', 'hidden');
+
+            // ★ 前回の戦闘アニメUIを完全にたたんで初期状態に戻す
+            const animOverlay = document.getElementById('battle-anim-overlay');
+            if (animOverlay) animOverlay.classList.add('hidden');
+            
+            // 選択されていた敵デッキIDを localStorage から取得
+            const savedConfig = localStorage.getItem('selectedBattleConfig');
+            let targetDeckId = 'd01';
+            if (savedConfig) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    if (config.deckId) targetDeckId = config.deckId;
+                } catch(e) {}
+            }
+
+            resetGameVariables();
+            setupCpuDeck(targetDeckId); // ★ 選択していた敵デッキで再セットアップ
+            playSceneBGM(targetDeckId, true); // ★ 選択していた対戦BGMを再生
+
+            refreshAllUI();
+            triggerTurnCutin(1);
+        };
+    }
+
+    // タイトルに戻るボタン：BGM停止してタイトルへ
     if (titleBtn) {
         titleBtn.onclick = () => {
             stopEraBGM();
-            sessionStorage.removeItem('isP2PMatch');
             window.location.href = 'title.html';
         };
     }
@@ -1254,52 +1177,13 @@ function showGameResultCutin() {
     }
 }
 
-function handleRematchSameDeck() {
-    gameState.myRematchRequest = true;
-    gameState.p2pManager.sendRematchSame();
-
-    document.getElementById('game-result-cutin-modal')?.classList.add('hidden');
-    const waitText = document.getElementById('p2p-waiting-text');
-    if (waitText) waitText.innerText = "相手のデッキ選択を待っています...";
-    document.getElementById('p2p-waiting-opponent-modal')?.classList.remove('hidden');
-
-    if (gameState.opponentRematchRequest) {
-        startRematchSequence();
-    }
-}
-
-function startRematchSequence() {
-    gameState.myRematchRequest = false;
-    gameState.opponentRematchRequest = false;
-
-    resetP2PGameVariables();
-
-    if (gameState.myDeckReadyData) {
-        gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);
-    }
-    
-    checkStartBattleSequence();
-}
-
-function handleRematchChangeDeck() {
-    gameState.p2pManager.sendChangeDeck();
-    resetToDeckSelectModal();
-}
-
-function resetToDeckSelectModal() {
-    document.getElementById('game-result-cutin-modal')?.classList.add('hidden');
-    document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
-
-    gameState.myDeckReadyData = null;
-    gameState.opponentDeckData = null;
-
-    document.getElementById('p2p-deck-select-modal')?.classList.remove('hidden');
-}
-
 function refreshAllUI() {
+    updateImageModeButtonUI();
+
     const turnEl = document.getElementById('current-turn-num');
     if (turnEl) turnEl.innerText = `${Math.min(gameState.turn, gameState.maxTurn)}/${gameState.maxTurn}`;
 
+    // 先ほど作成した関数を呼び出す
     updateBattleStartButtonUI();
 
     const playerHpEl = document.getElementById('player-hp-text') || document.getElementById('player-hp-num');
@@ -1322,7 +1206,7 @@ function refreshAllUI() {
 
     if (gameState.cpuJoker) {
         const cpuNameEl = document.getElementById('cpu-joker-name');
-        if (cpuNameEl) cpuNameEl.innerText = gameState.cpuJoker.name || '対戦相手';
+        if (cpuNameEl) cpuNameEl.innerText = gameState.cpuJoker.name || '卑弥呼';
 
         const cpuImgEl = document.getElementById('cpu-joker-img');
         if (cpuImgEl) {
@@ -1330,8 +1214,7 @@ function refreshAllUI() {
                 ? (gameState.cpuJoker.imageReal || gameState.cpuJoker.image_real)
                 : (gameState.cpuJoker.imageIllust || gameState.cpuJoker.image_illust);
             
-            cpuImgEl.className = "w-full h-full object-cover object-top aspect-[3/4]";
-
+            // ★ 画像名が存在する場合のみ src をセット（空の時に NO IMAGE が浮き出るのを防止）
             if (imageName) {
                 cpuImgEl.src = `images/${imageName}`;
             } else {
@@ -1341,16 +1224,25 @@ function refreshAllUI() {
         }
     }
 
-    // ★修正: 受信した相手のじゃんけん枚数を表示
+    const cpuCounts = { gu: 0, cho: 0, pa: 0 };
+    const allCpuCards = [
+        ...(Array.isArray(gameState.cpuHand) ? gameState.cpuHand : []),
+        ...(Array.isArray(gameState.cpuDeck) ? gameState.cpuDeck : [])
+    ];
+
+    allCpuCards.forEach(card => {
+        if (card && cpuCounts[card.janken] !== undefined) {
+            cpuCounts[card.janken]++;
+        }
+    });
+
     const cpuGuEl = document.getElementById('cpu-deck-gu');
     const cpuChoEl = document.getElementById('cpu-deck-cho');
     const cpuPaEl = document.getElementById('cpu-deck-pa');
 
-    const oppStat = gameState.opponentHandStat || { handPowerSum: 0, gu: 0, cho: 0, pa: 0 };
-
-    if (cpuGuEl) cpuGuEl.innerText = `${oppStat.gu || 0}枚`;
-    if (cpuChoEl) cpuChoEl.innerText = `${oppStat.cho || 0}枚`;
-    if (cpuPaEl) cpuPaEl.innerText = `${oppStat.pa || 0}枚`;
+    if (cpuGuEl) cpuGuEl.innerText = `${cpuCounts.gu}枚`;
+    if (cpuChoEl) cpuChoEl.innerText = `${cpuCounts.cho}枚`;
+    if (cpuPaEl) cpuPaEl.innerText = `${cpuCounts.pa}枚`;
 
     const handContainer = document.getElementById('player-hand-container');
     if (handContainer && gameModules && gameModules.renderBattleUI) {
@@ -1360,34 +1252,54 @@ function refreshAllUI() {
         });
     }
 
-    // ★修正: 受信した相手の手札Power合計値（oppStat.handPowerSum）に基づいて危険度判定＆点滅演出
+    // ★ 危険度判定＆点滅演出の適用
     const cpuJokerBox = document.getElementById('cpu-joker-box');
     const cpuDangerEl = document.getElementById('cpu-danger-level');
 
-    if (cpuJokerBox && cpuDangerEl) {
-        const cpuHandPowerSum = oppStat.handPowerSum || 0;
+    if (cpuJokerBox && cpuDangerEl && Array.isArray(gameState.cpuHand)) {
+        // CPU手札5枚のPower合計値を算出
+        const cpuHandPowerSum = gameState.cpuHand.reduce((sum, card) => sum + (parseInt(card.power, 10) || 0), 0);
 
+        // 点滅用クラスの初期化
         cpuJokerBox.classList.remove('danger-mid-glow', 'danger-high-glow', 'danger-extreme-glow');
 
         if (cpuHandPowerSum >= 3600) {
+            // 3600〜 : 特大（激しい赤点滅）
             cpuJokerBox.classList.add('danger-extreme-glow');
             cpuDangerEl.innerText = '危険度：特大 ⚠️';
             cpuDangerEl.className = 'text-xs font-black mt-0.5 text-rose-400 animate-pulse';
         } else if (cpuHandPowerSum >= 2900) {
+            // 2900〜3599 : 大（ほのかに赤点滅）
             cpuJokerBox.classList.add('danger-high-glow');
             cpuDangerEl.innerText = '危険度：大 ⚠️';
             cpuDangerEl.className = 'text-xs font-bold mt-0.5 text-rose-300';
         } else if (cpuHandPowerSum >= 2250) {
+            // 2250〜2899 : 中（ほのかに黄点滅）
             cpuJokerBox.classList.add('danger-mid-glow');
             cpuDangerEl.innerText = '危険度：中 ⚡';
             cpuDangerEl.className = 'text-xs font-bold mt-0.5 text-amber-300';
         } else {
+            // 〜2249 : 小（通常表示）
             cpuDangerEl.innerText = '危険度：小 🛡️';
             cpuDangerEl.className = 'text-xs font-bold mt-0.5 text-slate-400';
         }
     }
 
     updateCalculatorUI();
+}
+
+function updateImageModeButtonUI() {
+    const labelEl = document.getElementById('img-mode-label');
+    const modeBtn = document.getElementById('btn-toggle-img-mode') || document.getElementById('img-mode-toggle');
+    const isReal = gameState.displayMode === 'real';
+    const modeText = isReal ? '資料' : 'イラスト';
+
+    if (labelEl) {
+        labelEl.innerText = modeText;
+    } else if (modeBtn) {
+        const textNode = Array.from(modeBtn.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0);
+        if (textNode) textNode.textContent = modeText;
+    }
 }
 
 function getPokerHandInfo(cards) {
@@ -1566,7 +1478,9 @@ function updateCalculatorUI() {
             `);
         }
 
-        tagsEl.className = "grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] overflow-y-auto content-start";
+        // ★ 136px の高さ設定・ゆとり配置を完全適用
+        const overflowClass = activeEntries.length > 8 ? "overflow-y-auto" : "overflow-hidden";
+        tagsEl.className = `grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950 rounded-xl border border-slate-800 w-full h-[136px] ${overflowClass} content-start`;
         tagsEl.innerHTML = slotsHTML.join('');
     }
 
@@ -1578,6 +1492,21 @@ function updateCalculatorUI() {
 
     if (atkEl) atkEl.innerText = totalAtk.toLocaleString();
     if (defEl) defEl.innerText = totalDef.toLocaleString();
+}
+
+function switchTab(tabName) {
+    const tabs = ['battle', 'deck', 'gacha', 'versus'];
+    tabs.forEach(t => {
+        const panel = document.getElementById(`tab-${t}`);
+        const btn = document.getElementById(`tab-${t}-btn`);
+        if (panel) panel.classList.toggle('hidden', t !== tabName);
+        if (btn) {
+            btn.className = t === tabName 
+                ? "px-3 py-1 rounded-lg text-xs sm:text-sm font-bold bg-amber-600 text-white shadow-md transition-all"
+                : "px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold text-slate-400 hover:text-amber-300 transition-all";
+        }
+    });
+    refreshAllUI();
 }
 
 function getJankenHandType(cards) {
@@ -1675,7 +1604,7 @@ function evaluateSideStatus(cards, tagMaster) {
     };
 }
 
-function calculateBattleResult(playerCards, cpuCards, tagMaster) {
+export function calculateBattleResult(playerCards, cpuCards, tagMaster) {
     const playerStat = evaluateSideStatus(playerCards, tagMaster);
     const cpuStat = evaluateSideStatus(cpuCards, tagMaster);
 
@@ -1717,7 +1646,10 @@ function calculateBattleResult(playerCards, cpuCards, tagMaster) {
     };
 }
 
-function triggerTurnCutin(turnNumber, callback) {
+// ==========================================
+// ★ ターンスタート・カットイン演出関数
+// ==========================================
+export function triggerTurnCutin(turnNumber, callback) {
     const overlay = document.getElementById('turn-cutin-overlay');
     const textEl = document.getElementById('turn-cutin-text');
 
@@ -1726,6 +1658,7 @@ function triggerTurnCutin(turnNumber, callback) {
         return;
     }
 
+    // ターン数に応じたテキスト指定
     let turnText = '';
     if (turnNumber === 1) turnText = '第１陣 開始！';
     else if (turnNumber === 2) turnText = '第２陣 開始！';
@@ -1735,14 +1668,18 @@ function triggerTurnCutin(turnNumber, callback) {
     else turnText = `第${turnNumber}陣 開始！`;
 
     textEl.innerText = turnText;
+
+    // 非表示解除
     overlay.classList.remove('hidden');
 
+    // 次の描画フレームで active を付与してアニメーションを開始
     requestAnimationFrame(() => {
         setTimeout(() => {
             overlay.classList.add('active');
         }, 20);
     });
 
+    // 1.5秒間しっかり見せてからフェードアウト
     setTimeout(() => {
         overlay.classList.remove('active');
         setTimeout(() => {
@@ -1752,8 +1689,9 @@ function triggerTurnCutin(turnNumber, callback) {
     }, 1500);
 }
 
+// 起動（DOMContentLoadedの遅延発火対策）
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initP2PGame);
+    document.addEventListener('DOMContentLoaded', initGame);
 } else {
-    initP2PGame();
+    initGame();
 }
