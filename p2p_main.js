@@ -433,10 +433,14 @@ function checkStartBattleSequence() {
 
 async function checkExecuteTurn() {
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
-        // 3. 双方揃ったので、待機画面を閉じて画面をクリーンにする（P2P固有）
-        document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
+        // 1. 双方揃ったので待機画面を閉じる
+        const waitModal = document.getElementById('p2p-waiting-opponent-modal');
+        if (waitModal) {
+            waitModal.style.display = 'none';
+            waitModal.classList.add('hidden');
+        }
 
-        // --- ここから下は Solo と100%同じ「計算 ➔ 演出 ➔ リザルト」の純粋なフロー ---
+        // --- 以下、計算 ➔ 演出 ➔ リザルト実行 ---
         const playerCards = gameState.myTurnChoice
             .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
             .filter(Boolean);
@@ -533,21 +537,24 @@ function setupEventListeners() {
     const confirmBtn = document.getElementById('btn-modal-confirm');
     if (confirmBtn) {
         confirmBtn.onclick = () => {
-            hideBattleConfirmModal(); // 1. 確認画面を閉じる（ソロ共通）
+            hideBattleConfirmModal(); // 1. 確認画面を閉じる
             
             if (gameState.p2pManager) {
                 gameState.myTurnChoice = [...gameState.selectedCardIds];
-                gameState.p2pManager.sendTurnChoice(gameState.myTurnChoice);
+                gameState.p2pManager.sendTurnChoice(gameState.myTurnChoice); // 2. 自分の選択を送信
 
-                // 2. 相手がまだ選択していない場合のみ、待機画面を開く（P2P固有）
+                // 3. 双方揃っていない場合は「待機画面」を表示して手札操作をロックする
                 if (!gameState.opponentTurnChoice) {
                     const waitModal = document.getElementById('p2p-waiting-opponent-modal');
                     const waitText = document.getElementById('p2p-waiting-text');
                     if (waitText) waitText.innerText = "対戦相手のカード選択を待っています... ⏳";
-                    if (waitModal) waitModal.classList.remove('hidden');
+                    if (waitModal) {
+                        waitModal.style.display = 'flex';
+                        waitModal.classList.remove('hidden');
+                    }
                 }
 
-                checkExecuteTurn();
+                checkExecuteTurn(); // 4. 双方揃っていれば戦闘開始[cite: 11]
             }
         };
     }
