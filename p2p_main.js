@@ -431,53 +431,27 @@ function checkStartBattleSequence() {
     }
 }
 
-// 🟢 修正：選択完了時のバトル実行判定 (battle_engine.js へ委譲)
 async function checkExecuteTurn() {
-    console.log("[P2P Check] checkExecuteTurnが呼び出されました", {
-        myChoice: gameState.myTurnChoice,
-        opponentChoice: gameState.opponentTurnChoice
-    });
-
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
-        console.log("[P2P] 双方のカード選択が揃いました！ 復元・計算を開始します。");
+        // 3. 双方揃ったので、待機画面を閉じて画面をクリーンにする（P2P固有）
+        document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
 
-        try {
-            // 自分の選択カードを自分の手札から取得
-            const playerCards = gameState.myTurnChoice
-                .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
-                .filter(Boolean);
+        // --- ここから下は Solo と100%同じ「計算 ➔ 演出 ➔ リザルト」の純粋なフロー ---
+        const playerCards = gameState.myTurnChoice
+            .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
+            .filter(Boolean);
 
-            // 相手の選択カードを全カードDBから直接復元
-            const cpuCards = gameState.opponentTurnChoice
-                .map(id => {
-                    const found = gameState.allCards.find(c => String(c.id) === String(id));
-                    return found ? { ...found } : null;
-                })
-                .filter(Boolean);
+        const cpuCards = gameState.opponentTurnChoice
+            .map(id => gameState.allCards.find(c => String(c.id) === String(id)))
+            .filter(Boolean);
 
-            console.log("[P2P] カード復元結果:", { playerCards, cpuCards });
+        if (playerCards.length !== 3 || cpuCards.length !== 3) return;
 
-            if (playerCards.length !== 3 || cpuCards.length !== 3) {
-                console.error("[P2P 判定エラー] カードが3枚ずつ復元できませんでした。処理を中断します。", {
-                    playerCardsCount: playerCards.length,
-                    cpuCardsCount: cpuCards.length
-                });
-                return;
-            }
+        gameState.myTurnChoice = null;
+        gameState.opponentTurnChoice = null;
 
-            // フラグをクリア
-            gameState.myTurnChoice = null;
-            gameState.opponentTurnChoice = null;
-
-            // ★ main.js と100%同一の battle_engine.js を呼び出し（計算 ➔ 演出 ➔ リザルト描画）
-            if (window.executeBattleSequence) {
-                await window.executeBattleSequence(playerCards, cpuCards, gameState, playSceneBGM);
-            } else {
-                console.error("[P2P Fatal] window.executeBattleSequence (battle_engine.js) が読み込まれていません。");
-            }
-
-        } catch (err) {
-            console.error("[P2P Fatal Error] checkExecuteTurn 内で例外が発生しました:", err);
+        if (window.executeBattleSequence) {
+            await window.executeBattleSequence(playerCards, cpuCards, gameState, playSceneBGM);
         }
     }
 }
@@ -559,10 +533,20 @@ function setupEventListeners() {
     const confirmBtn = document.getElementById('btn-modal-confirm');
     if (confirmBtn) {
         confirmBtn.onclick = () => {
-            hideBattleConfirmModal();
+            hideBattleConfirmModal(); // 1. 確認画面を閉じる（ソロ共通）
+            
             if (gameState.p2pManager) {
                 gameState.myTurnChoice = [...gameState.selectedCardIds];
                 gameState.p2pManager.sendTurnChoice(gameState.myTurnChoice);
+
+                // 2. 相手がまだ選択していない場合のみ、待機画面を開く（P2P固有）
+                if (!gameState.opponentTurnChoice) {
+                    const waitModal = document.getElementById('p2p-waiting-opponent-modal');
+                    const waitText = document.getElementById('p2p-waiting-text');
+                    if (waitText) waitText.innerText = "対戦相手のカード選択を待っています... ⏳";
+                    if (waitModal) waitModal.classList.remove('hidden');
+                }
+
                 checkExecuteTurn();
             }
         };
