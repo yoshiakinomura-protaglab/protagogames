@@ -433,14 +433,14 @@ function checkStartBattleSequence() {
 
 async function checkExecuteTurn() {
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
-        // 1. 双方揃ったので待機画面を閉じる
+        // ★ 1. 双方の選択が揃ったので、待機画面（モーダル）を確実に閉じる
         const waitModal = document.getElementById('p2p-waiting-opponent-modal');
         if (waitModal) {
             waitModal.style.display = 'none';
             waitModal.classList.add('hidden');
         }
 
-        // --- 以下、計算 ➔ 演出 ➔ リザルト実行 ---
+        // 2. 選択カードの復元
         const playerCards = gameState.myTurnChoice
             .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
             .filter(Boolean);
@@ -454,6 +454,7 @@ async function checkExecuteTurn() {
         gameState.myTurnChoice = null;
         gameState.opponentTurnChoice = null;
 
+        // ★ 3. Solo共通の戦闘計算 ➔ 演出 ➔ リザルト描画を実行
         if (window.executeBattleSequence) {
             await window.executeBattleSequence(playerCards, cpuCards, gameState, playSceneBGM);
         }
@@ -547,6 +548,12 @@ function setupEventListeners() {
                 if (!gameState.opponentTurnChoice) {
                     const waitModal = document.getElementById('p2p-waiting-opponent-modal');
                     const waitText = document.getElementById('p2p-waiting-text');
+                    const codeBox = document.getElementById('p2p-room-code-display-box');
+
+                    // ★ 1. 部屋番号表示ボックスを隠す（対戦中待機モーダル用）
+                    if (codeBox) codeBox.classList.add('hidden');
+
+                    // ★ 2. メッセージを対戦相手待ちに変更して表示
                     if (waitText) waitText.innerText = "対戦相手のカード選択を待っています... ⏳";
                     if (waitModal) {
                         waitModal.style.display = 'flex';
