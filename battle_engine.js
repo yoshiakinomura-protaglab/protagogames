@@ -417,6 +417,15 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult, gameState
 
 function showTurnResultModal(playerCards, cpuCards, battleResult, gameState, viewTurnIndex = null) {
     const modal = document.getElementById('turn-result-modal');
+
+    console.log("[SHOW MODAL CHECK]", {
+        hasModalElement: !!modal,
+        turnHistoryLen: gameState?.turnHistory?.length,
+        currentTurn: gameState?.turn,
+        modalClasses: modal?.className,
+        modalStyleDisplay: modal?.style?.display
+    });
+
     if (!modal) return;
 
     // ★ 修正: モーダルを最前面かつ確実に表示させる
