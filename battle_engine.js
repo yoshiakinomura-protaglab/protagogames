@@ -356,14 +356,17 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult, gameState
         retryCount++;
     }
 
+    console.log("[ENGINE LOG 1] アニメーション再生直前");
     if (window.battleAnim) {
         await window.battleAnim.play(animData);
     }
+    console.log("[ENGINE LOG 2] アニメーション再生完了 (play を抜けました)");
 
     const turnResultModal = document.getElementById('turn-result-modal');
     if (turnResultModal) turnResultModal.classList.add('hidden');
 
     if (isGameOver) {
+        console.log("[ENGINE LOG 3] 決着ルート（ showGameResultCutin ）を実行します");
         gameState.playerHp = Math.max(0, gameState.playerHp - battleResult.cpu.damageGiven);
         gameState.cpuHp = Math.max(0, gameState.cpuHp - battleResult.player.damageGiven);
 
@@ -387,6 +390,8 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult, gameState
             whiteOverlay.remove();
         }
     } else {
+        console.log("[ENGINE LOG 4] 通常ターンルート（ showTurnResultModal ）を実行します");
+
         let sumiEl = document.querySelector('.sumi-arashi-overlay');
         if (!sumiEl) {
             sumiEl = document.createElement('div');
@@ -395,14 +400,18 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult, gameState
             await sleep(400);
         }
 
+        console.log("[ENGINE LOG 5] showTurnResultModal を呼び出します");
         showTurnResultModal(playerCards, cpuCards, battleResult, gameState, null);
+        console.log("[ENGINE LOG 6] showTurnResultModal 実行完了");
 
         await sleep(200);
 
-        sumiEl.style.transition = 'opacity 0.4s ease-out';
-        sumiEl.style.opacity = '0';
-        await sleep(400);
-        sumiEl.remove();
+        if (sumiEl) {
+            sumiEl.style.transition = 'opacity 0.4s ease-out';
+            sumiEl.style.opacity = '0';
+            await sleep(400);
+            sumiEl.remove();
+        }
     }
 }
 
