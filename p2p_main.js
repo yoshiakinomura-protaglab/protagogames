@@ -539,11 +539,22 @@ function setupEventListeners() {
         };
     }
 
+    // ★ 再戦・デッキ変更ボタン（重複宣言を削除し1箇所に集約）
     const btnRematchSame = document.getElementById('btn-p2p-rematch-same');
     if (btnRematchSame) btnRematchSame.onclick = handleRematchSameDeck;
 
     const btnChangeDeck = document.getElementById('btn-p2p-change-deck');
     if (btnChangeDeck) btnChangeDeck.onclick = handleRematchChangeDeck;
+
+    // ★ レシート（合戦結果モーダル）内の「再戦」ボタン対応
+    const restartBtn = document.getElementById('btn-result-restart');
+    if (restartBtn) {
+        restartBtn.onclick = () => {
+            const modal = document.getElementById('turn-result-modal');
+            if (modal) modal.classList.add('hidden');
+            handleRematchSameDeck();
+        };
+    }
 
     const confirmBtn = document.getElementById('btn-modal-confirm');
     if (confirmBtn) {
@@ -586,7 +597,10 @@ function setupEventListeners() {
             audioOverlay.classList.add('opacity-0', 'pointer-events-none');
             setTimeout(() => { try { audioOverlay.remove(); } catch(e) {} }, 500);
             playSceneBGM('d01', true);
-            setTimeout(() => { triggerTurnCutin(1); }, 200);
+            setTimeout(() => {
+                const cutinFn = window.triggerTurnCutin || (typeof triggerTurnCutin !== 'undefined' ? triggerTurnCutin : null);
+                if (cutinFn) cutinFn(1);
+            }, 200);
         };
     }
 
