@@ -432,15 +432,15 @@ function checkStartBattleSequence() {
 }
 
 async function checkExecuteTurn() {
-    if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
-        // ★ 1. 双方の選択が揃ったので、待機画面（モーダル）を確実に閉じる
-        const waitModal = document.getElementById('p2p-waiting-opponent-modal');
-        if (waitModal) {
-            waitModal.style.display = 'none';
-            waitModal.classList.add('hidden');
-        }
+    console.log("[P2P LOG 1] checkExecuteTurn 発火", {
+        myChoice: gameState.myTurnChoice,
+        opponentChoice: gameState.opponentTurnChoice
+    });
 
-        // 2. 選択カードの復元
+    if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
+        console.log("[P2P LOG 2] 双方のカード選択が揃いました。待機モーダルを閉じます。");
+        document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
+
         const playerCards = gameState.myTurnChoice
             .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
             .filter(Boolean);
@@ -449,14 +449,22 @@ async function checkExecuteTurn() {
             .map(id => gameState.allCards.find(c => String(c.id) === String(id)))
             .filter(Boolean);
 
-        if (playerCards.length !== 3 || cpuCards.length !== 3) return;
+        console.log("[P2P LOG 3] カード復元完了", { playerCards, cpuCards });
+
+        if (playerCards.length !== 3 || cpuCards.length !== 3) {
+            console.error("[P2P ERROR] カード枚数が不正です", playerCards.length, cpuCards.length);
+            return;
+        }
 
         gameState.myTurnChoice = null;
         gameState.opponentTurnChoice = null;
 
-        // ★ 3. Solo共通の戦闘計算 ➔ 演出 ➔ リザルト描画を実行
+        console.log("[P2P LOG 4] executeBattleSequence を呼び出します...");
         if (window.executeBattleSequence) {
             await window.executeBattleSequence(playerCards, cpuCards, gameState, playSceneBGM);
+            console.log("[P2P LOG 5] executeBattleSequence の実行が完全終了しました！");
+        } else {
+            console.error("[P2P ERROR] executeBattleSequence が未定義です");
         }
     }
 }
