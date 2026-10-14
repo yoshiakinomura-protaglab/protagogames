@@ -313,5 +313,160 @@
     <!-- P2P通信スクリプト -->
     <script type="module" src="p2p_main.js"></script>
 
+
+    <!-- ★ 追加：合戦詳細リザルトモーダル（レシート明細風） -->
+    <div id="turn-result-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[10001] hidden transition-opacity">
+        <div class="bg-slate-950 border-2 border-amber-500 rounded-2xl p-4 sm:p-5 max-w-2xl w-11/12 text-left shadow-2xl shadow-amber-950/80 max-h-[90vh] flex flex-col font-mono text-slate-200">
+            
+            <h2 class="text-xl font-black font-yuji text-center text-yellow-300 border-b border-dashed border-amber-500/60 pb-2 mb-3 flex-shrink-0">
+                合戦結果報告
+            </h2>
+
+            <!-- 左右レイアウト（左：レシート、右：陣履歴ボタン） -->
+            <div class="grid grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden">
+                
+                <!-- 【左側：10列】レシート明細（スクロール可能） -->
+                <div class="col-span-9 sm:col-span-10 overflow-y-auto pr-1.5 space-y-2">
+                    
+                    <!-- ヘッダー -->
+                    <div class="grid grid-cols-12 gap-2 text-xs border-b border-slate-800 pb-2 mb-2 font-bold text-slate-400">
+                        <div class="col-span-3">項目</div>
+                        <div class="col-span-4 text-emerald-400 text-center">自軍</div>
+                        <div class="col-span-1 text-center text-slate-600">|</div>
+                        <div class="col-span-4 text-rose-400 text-center">敵軍</div>
+                    </div>
+
+                    <!-- 参戦者画像 ＆ 名前 -->
+                    <div class="grid grid-cols-12 gap-2 items-center border-b border-slate-800/80 pb-2 mb-2 text-xs">
+                        <div class="col-span-3 font-bold text-slate-300">参戦者</div>
+                        <div id="res-p-cards" class="col-span-4 grid grid-cols-3 gap-1"></div>
+                        <div class="col-span-1 text-center text-slate-700">|</div>
+                        <div id="res-c-cards" class="col-span-4 grid grid-cols-3 gap-1"></div>
+                    </div>
+
+                    <!-- 有名度合計 -->
+                    <div class="grid grid-cols-12 gap-2 items-center border-b border-slate-800/80 py-1.5 text-xs">
+                        <div class="col-span-3 font-bold text-slate-300">有名度合計</div>
+                        <div id="res-p-power" class="col-span-4 text-center font-black text-amber-300 text-sm">0</div>
+                        <div class="col-span-1 text-center text-slate-700">|</div>
+                        <div id="res-c-power" class="col-span-4 text-center font-black text-amber-300 text-sm">0</div>
+                    </div>
+
+                    <!-- ポーカー役 -->
+                    <div class="grid grid-cols-12 gap-2 items-center border-b border-dashed border-slate-700 py-1.5 text-xs">
+                        <div class="col-span-3 font-bold text-slate-300">ポーカー役</div>
+                        <div id="res-p-poker" class="col-span-4 text-center font-bold text-yellow-300">役なし</div>
+                        <div class="col-span-1 text-center text-slate-700">|</div>
+                        <div id="res-c-poker" class="col-span-4 text-center font-bold text-yellow-300">役なし</div>
+                    </div>
+
+                    <!-- 発動特性明細（1行1特性） -->
+                    <div class="py-2 border-b border-slate-800 space-y-2 text-xs">
+                        <div class="font-bold text-amber-400 bg-slate-900/80 px-2 py-0.5 rounded border border-amber-900/40">発動特性</div>
+                        
+                        <!-- 時代/汎用特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-400 mb-0.5">【時代・汎用特性】</div>
+                            <div id="res-list-gen" class="space-y-1"></div>
+                        </div>
+
+                        <!-- 攻撃特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-rose-400 mb-0.5">【攻撃特性】</div>
+                            <div id="res-list-atk" class="space-y-1"></div>
+                        </div>
+
+                        <!-- 防御特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-blue-400 mb-0.5">【防御特性】</div>
+                            <div id="res-list-def" class="space-y-1"></div>
+                        </div>
+
+                        <!-- サポート特性 -->
+                        <div>
+                            <div class="text-[11px] font-bold text-amber-300 mb-0.5">【サポート特性】</div>
+                            <div id="res-list-sup" class="space-y-1"></div>
+                        </div>
+                    </div>
+
+                    <!-- 特性適用後の数値 -->
+                    <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800 my-2 text-xs space-y-1">
+                        <div class="flex justify-between items-center text-slate-300">
+                            <span>自軍攻撃力 (特性込): <strong id="res-mid-p-atk" class="text-rose-400 font-black">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span>敵軍防御力 (特性込): <strong id="res-mid-c-def" class="text-blue-400 font-black">0</strong></span>
+                        </div>
+                        <div class="flex justify-between items-center text-slate-300">
+                            <span>自軍防御力 (特性込): <strong id="res-mid-p-def" class="text-blue-400 font-black">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span>敵軍攻撃力 (特性込): <strong id="res-mid-c-atk" class="text-rose-400 font-black">0</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- デバフ特性 -->
+                    <div class="py-2 border-b border-dashed border-purple-800/60 text-xs">
+                        <div class="text-[11px] font-bold text-purple-400 mb-1">【デバフ特性】</div>
+                        <div id="res-list-deb" class="space-y-1"></div>
+                    </div>
+
+                    <!-- じゃんけん補正 -->
+                    <div class="py-2 border-b border-slate-800 text-xs">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-slate-300">じゃんけん判定:</span>
+                            <span id="res-janken-text" class="font-black text-yellow-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">引き分け</span>
+                        </div>
+                        <div class="grid grid-cols-12 gap-2 text-center text-[11px]">
+                            <div id="res-p-janken-mult" class="col-span-5 font-bold text-emerald-300">自軍補正: x1.0</div>
+                            <div class="col-span-2 text-slate-700">|</div>
+                            <div id="res-c-janken-mult" class="col-span-5 font-bold text-rose-300">敵軍補正: x1.0</div>
+                        </div>
+                    </div>
+
+                    <!-- 最終ステータス -->
+                    <div class="bg-slate-900/90 p-2.5 rounded-xl border border-amber-500/50 my-2 text-xs space-y-1.5">
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-200">最終自軍ATK: <strong id="res-final-p-atk" class="text-rose-400 font-black text-sm">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span class="text-slate-200">最終敵軍DEF: <strong id="res-final-c-def" class="text-blue-400 font-black text-sm">0</strong></span>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-slate-800 pt-1">
+                            <span class="text-slate-200">最終自軍DEF: <strong id="res-final-p-def" class="text-blue-400 font-black text-sm">0</strong></span>
+                            <span class="text-slate-600">VS</span>
+                            <span class="text-slate-200">最終敵軍ATK: <strong id="res-final-c-atk" class="text-rose-400 font-black text-sm">0</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 最終与ダメージ・被ダメージ -->
+                    <div class="grid grid-cols-2 gap-2 pt-1 pb-2 border-t border-dashed border-amber-500/60 text-center">
+                        <div class="bg-rose-950/80 p-2 rounded-xl border border-rose-600/80">
+                            <div class="text-[10px] text-rose-300 font-bold">敵軍へ与えたダメージ</div>
+                            <div id="res-damage-given-cpu" class="font-mono font-black text-xl text-yellow-300">0</div>
+                        </div>
+                        <div class="bg-blue-950/80 p-2 rounded-xl border border-blue-600/80">
+                            <div class="text-[10px] text-blue-300 font-bold">自軍が受けたダメージ</div>
+                            <div id="res-damage-given-player" class="font-mono font-black text-xl text-yellow-300">0</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 陣切替タブボタンエリア -->
+                <div class="col-span-3 sm:col-span-2 flex flex-col justify-start gap-1.5 border-l border-slate-800 pl-2">
+                    <div class="text-[10px] sm:text-xs font-bold text-amber-400 font-yuji text-center border-b border-slate-800 pb-1">
+                        <i class="fa-solid fa-clock-rotate-left"></i> 陣履歴
+                    </div>
+                    
+                    <div id="result-turn-tab-container" class="flex flex-col gap-1.5 flex-1 pt-1"></div>
+                </div>
+
+            </div>
+
+            <!-- 次へ進むボタン -->
+            <button id="btn-next-turn" class="w-full mt-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-900/50 transition-all active:scale-95 cursor-pointer flex-shrink-0">
+                次のターンへ進む ➔
+            </button>
+        </div>
+    </div>
+    
 </body>
 </html>
