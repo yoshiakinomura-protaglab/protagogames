@@ -550,8 +550,8 @@ function setupEventListeners() {
     const restartBtn = document.getElementById('btn-result-restart');
     if (restartBtn) {
         restartBtn.onclick = () => {
-            const modal = document.getElementById('turn-result-modal');
-            if (modal) modal.classList.add('hidden');
+            document.getElementById('turn-result-modal')?.classList.add('hidden');
+            document.getElementById('game-result-cutin-modal')?.classList.add('hidden');
             handleRematchSameDeck();
         };
     }
