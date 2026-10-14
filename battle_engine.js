@@ -395,7 +395,7 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult, gameState
             await sleep(400);
         }
 
-        showTurnResultModal(playerCards, cpuCards, battleResult, gameState);
+        showTurnResultModal(playerCards, cpuCards, battleResult, gameState, null);
 
         await sleep(200);
 
@@ -594,7 +594,7 @@ function showGameResultCutin(resultType, gameState) {
                 if (nextBtn) nextBtn.innerText = '➔ 決着画面に戻る';
 
                 const { playerCards, cpuCards, battleResult } = gameState.lastBattleResult;
-                // ★ 第4引数に gameState, 第5引数に null を正しく渡す
+                // ★ 修正: 第4引数に gameState, 第5引数に null を正しく渡す
                 showTurnResultModal(playerCards, cpuCards, battleResult, gameState, null);
             }
         };
