@@ -619,9 +619,7 @@ window.executeBattleSequence = async function(playerCards, cpuCards, gameState, 
     await runBattleAnimation(playerCards, cpuCards, battleResult, gameState, playSceneBGMFn);
 };
 
-// ==========================================
-// ★ ターンスタート・カットイン演出関数 (main.jsより移植)
-// ==========================================
+// ★ main.js の637行目からそのまま移植した関数本体（これで621行目の参照エラーが物理的に消滅します）
 function triggerTurnCutin(turnNumber, callback) {
     const overlay = document.getElementById('turn-cutin-overlay');
     const textEl = document.getElementById('turn-cutin-text');
