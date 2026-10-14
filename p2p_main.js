@@ -439,7 +439,11 @@ async function checkExecuteTurn() {
 
     if (gameState.myTurnChoice && gameState.opponentTurnChoice) {
         console.log("[P2P LOG 2] 双方のカード選択が揃いました。待機モーダルを閉じます。");
-        document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
+        const waitModal = document.getElementById('p2p-waiting-opponent-modal');
+        if (waitModal) {
+            waitModal.style.display = ''; // インラインをクリア
+            waitModal.classList.add('hidden');
+        }
 
         const playerCards = gameState.myTurnChoice
             .map(id => gameState.hand.find(c => String(c.id || c.cardId) === String(id)))
@@ -563,11 +567,10 @@ function setupEventListeners() {
 
                     // ★ 2. メッセージを対戦相手待ちに変更して表示
                     if (waitText) waitText.innerText = "対戦相手のカード選択を待っています... ⏳";
-                    if (waitModal) {
-                        waitModal.style.display = 'flex';
-                        waitModal.classList.remove('hidden');
+                    if (waitModal) {waitModal.classList.remove('hidden');
                     }
                 }
+
 
                 checkExecuteTurn(); // 4. 双方揃っていれば戦闘開始[cite: 11]
             }
