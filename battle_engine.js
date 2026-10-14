@@ -409,7 +409,11 @@ async function runBattleAnimation(playerCards, cpuCards, battleResult, gameState
 function showTurnResultModal(playerCards, cpuCards, battleResult, gameState, viewTurnIndex = null) {
     const modal = document.getElementById('turn-result-modal');
     if (!modal) return;
-    modal.style.zIndex = '900000';
+
+    // ★ 修正: モーダルを最前面かつ確実に表示させる
+    modal.style.zIndex = '999999';
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
 
     const targetTurnIdx = viewTurnIndex !== null ? viewTurnIndex : (gameState.turnHistory.length - 1);
     const historyData = gameState.turnHistory[targetTurnIdx];
