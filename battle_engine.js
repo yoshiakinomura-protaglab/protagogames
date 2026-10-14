@@ -594,7 +594,8 @@ function showGameResultCutin(resultType, gameState) {
                 if (nextBtn) nextBtn.innerText = '➔ 決着画面に戻る';
 
                 const { playerCards, cpuCards, battleResult } = gameState.lastBattleResult;
-                showTurnResultModal(playerCards, cpuCards, battleResult, gameState);
+                // ★ 第4引数に gameState, 第5引数に null を正しく渡す
+                showTurnResultModal(playerCards, cpuCards, battleResult, gameState, null);
             }
         };
     }
