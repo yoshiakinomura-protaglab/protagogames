@@ -614,8 +614,45 @@ window.executeBattleSequence = async function(playerCards, cpuCards, gameState, 
     await runBattleAnimation(playerCards, cpuCards, battleResult, gameState, playSceneBGMFn);
 };
 
+// ==========================================
+// ★ ターンスタート・カットイン演出関数 (main.jsより移植)
+// ==========================================
+function triggerTurnCutin(turnNumber, callback) {
+    const overlay = document.getElementById('turn-cutin-overlay');
+    const textEl = document.getElementById('turn-cutin-text');
+
+    if (!overlay || !textEl) {
+        if (callback) callback();
+        return;
+    }
+
+    let turnText = '';
+    if (turnNumber === 1) turnText = '第１陣 開始！';
+    else if (turnNumber === 2) turnText = '第２陣 開始！';
+    else if (turnNumber === 3) turnText = '第３陣 開始！';
+    else if (turnNumber === 4) turnText = '第４陣 開始！';
+    else if (turnNumber >= 5) turnText = '最終決戦 開始！';
+    else turnText = `第${turnNumber}陣 開始！`;
+
+    textEl.innerText = turnText;
+    overlay.classList.remove('hidden');
+
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            overlay.classList.add('active');
+        }, 20);
+    });
+
+    setTimeout(() => {
+        overlay.classList.remove('active');
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            if (callback) callback();
+        }, 300);
+    }, 1500);
+}
+
 // p2p_main.js や外部から直接呼べるように window へ一括公開
-// ※ executeBattleSequence は上で既に window.executeBattleSequence に直接代入されているためここでの再代入は不要です
 window.calculateBattleResult = calculateBattleResult;
 window.getPokerHandInfo = getPokerHandInfo;
 window.triggerTurnCutin = triggerTurnCutin;
