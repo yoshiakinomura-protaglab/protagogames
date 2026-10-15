@@ -430,7 +430,7 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, gameState, vie
 
     // ★ 修正: モーダルを最前面かつ確実に表示させる
     modal.style.zIndex = '999999';
-    modal.style.display = 'flex';
+    modal.style.display = ''; // ★ インラインの flex/none をクリア
     modal.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
 
     const targetTurnIdx = viewTurnIndex !== null ? viewTurnIndex : (gameState.turnHistory.length - 1);
