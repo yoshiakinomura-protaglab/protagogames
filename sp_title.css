@@ -1,6 +1,6 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （ボタン群をカードの左隣座標へ直接絶対配置する確定版）
+ * （中央巨大ロゴ ＆ 左ボタン・右3Dカード下端揃え 確定版）
  */
 
 @media (max-width: 767px) {
@@ -18,7 +18,7 @@
         box-sizing: border-box !important;
     }
 
-    /* --- 2. 最上段ヘッダー（時代・表示切替を右寄せ） --- */
+    /* --- 2. 最上段ヘッダー（時代・表示切替：右上維持・スリム化） --- */
     #title-screen-component > div.absolute.top-6.right-6 {
         position: absolute !important;
         top: 10px !important;
@@ -35,32 +35,30 @@
         border-radius: 8px !important;
     }
 
-    /* --- 3. 中央ロゴ（画面中央上部にドカンと配置） --- */
+    /* --- 3. 画面中央：1:1 円形ロゴ（中央にドカンと大きく表示） --- */
     #title-screen-component > div.relative.z-10.flex.flex-col {
         position: relative !important;
         margin-left: 0 !important;
-        margin-top: 25px !important;
+        margin-top: 35px !important;       /* ヘッダーとの間に適度な余白 */
         width: 100% !important;
         align-items: center !important;
         justify-content: flex-start !important;
     }
 
     #title-logo-img {
-        max-width: 260px !important;
-        width: 75vw !important;
+        max-width: 285px !important;       /* ★ ロゴを中央でドカンと拡大 */
+        width: 80vw !important;            /* 画面幅の80%を使用 */
         height: auto !important;
         margin: 0 auto !important;
         display: block !important;
     }
 
-    /* --- 4. ボタン群（★カードの左隣の座標へ absolute で直接固定！） --- */
-    
-    /* ボタンを包む親コンテナ（.w-[380px]）自体を絶対配置化 */
+    /* --- 4. 下段左側：メニューボタン群（下端基準 bottom: 20px） --- */
     #title-screen-component .w-\[380px\] {
         position: absolute !important;
-        left: 12px !important;           /* 画面左端から12px */
-        bottom: 20px !important;          /* 画面下端から20px */
-        width: 54% !important;           /* 左側 54% の幅を占有 */
+        left: 12px !important;
+        bottom: 20px !important;          /* ★ 下端を20pxに固定 */
+        width: 54% !important;
         max-width: 54% !important;
         margin: 0 !important;
         z-index: 30 !important;
@@ -74,7 +72,7 @@
         gap: 6px !important;
     }
 
-    /* ボタン内の不要なバッジ（コインGET等）を非表示 */
+    /* ボタン内のバッジ（コインGET等）を完全非表示 */
     #title-menu-container button > span.text-\[10px\],
     #title-menu-container button span.text-\[10px\] {
         display: none !important;
@@ -97,24 +95,24 @@
         font-size: 13px !important;
     }
 
-    /* --- 5. 3Dカード（右隣の座標へ absolute 固定） --- */
+    /* --- 5. 下段右側：3Dカード（下端を左ボタン群と下揃え） --- */
     #title-screen-component > div.absolute.right-8.bottom-12 {
         position: absolute !important;
-        right: 8px !important;            /* 画面右端から8px */
-        bottom: 15px !important;          /* ボタン群と平合する高さ */
+        right: 12px !important;
+        bottom: 20px !important;          /* ★ ボタン群と同じ下端20pxにピッタリ同期 */
         left: auto !important;
         top: auto !important;
-        width: 42% !important;            /* 右側 42% の幅を占有 */
+        width: 40% !important;
         display: flex !important;
         justify-content: center !important;
-        align-items: center !important;
+        align-items: flex-end !important; /* 下揃え */
         margin: 0 !important;
         z-index: 30 !important;
     }
 
     #title-screen-component .perspective-1000 {
-        width: 90px !important;           /* カード幅をスリム化 */
-        height: 120px !important;
+        width: 95px !important;           /* 存在感のあるカードサイズ */
+        height: 126px !important;
     }
 
     /* --- 6. モーダル群のスマホ幅調整 --- */
