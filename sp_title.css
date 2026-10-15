@@ -1,6 +1,6 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （キャンバス外・全画面自動黒塗り ＆ ボタン・カード位置完全同期 確定版）
+ * （#title-3d-card 親要素狙い撃ち・位置完全同期 確定版）
  */
 
 @media (max-width: 767px) {
@@ -8,11 +8,10 @@
     /* --- 1. キャンバス外・画面全体の完全黒塗り ＆ 溢れ防止 --- */
     html, body {
         height: 100dvh !important;
-        background-color: #000000 !important; /* キャンバス外の余白を完全な真っ黒に統一 */
+        background-color: #000000 !important;
         overflow: hidden !important;
     }
 
-    /* キャンバス全体の底面位置を上へシフト */
     #title-screen-component {
         padding: 10px 12px 60px 12px !important;
         height: 100dvh !important;
@@ -64,7 +63,7 @@
     #title-screen-component .w-\[380px\] {
         position: absolute !important;
         left: 10px !important;
-        bottom: 60px !important;          /* ★ 画面下から60px上に配置 */
+        bottom: 60px !important;          /* 下から60px */
         width: 58% !important;
         max-width: 58% !important;
         margin: 0 !important;
@@ -79,7 +78,7 @@
         gap: 8px !important;
     }
 
-    /* 不要バッジの非表示 */
+    /* 不要バッジ非表示 */
     #title-menu-container button > span.text-\[10px\],
     #title-menu-container button span.text-\[10px\] {
         display: none !important;
@@ -105,20 +104,26 @@
         font-size: 13px !important;
     }
 
-    /* --- 5. 下段右側：3Dカード（ボタン群と同じ底上げラインに完全同調） --- */
-    #title-screen-component > div.absolute.right-8.bottom-12,
-    #title-screen-component > div[class*="bottom-12"] {
+    /* --- 5. ★ 下段右側：3Dカード（#title-3d-card の2つ上の親コンテナを確実に移動） --- */
+    #title-3d-card {
+        /* JS回転の中心軸を維持 */
+        transform-origin: center center !important;
+    }
+
+    /* カードを包む一番外側の絶対配置コンテナ（#title-3d-cardから遡って直接狙い撃ち） */
+    #title-screen-component:has(#title-3d-card) > div:last-child,
+    div:has(> div > #title-3d-card) {
         position: absolute !important;
         right: 12px !important;
-        bottom: 60px !important;          /* ★ ボタン群と同じbottom: 60pxに同期 */
+        bottom: 60px !important;          /* ★ ボタン群と全く同じ bottom: 60px を強制適用 */
         top: auto !important;
         left: auto !important;
         margin: 0 !important;
         z-index: 30 !important;
     }
 
-    /* 3D枠のサイズ調整（JS自転アニメーションには一切干渉しない） */
-    #title-screen-component .perspective-1000 {
+    /* 遠近感枠のサイズ調整 */
+    .perspective-1000 {
         width: 90px !important;
         height: 120px !important;
     }
