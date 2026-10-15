@@ -81,6 +81,8 @@ const gameState = {
     opponentTurnChoice: null,
     myRematchRequest: false,
     opponentRematchRequest: false,
+    myNextTurnReady: false,       // ★ 追加
+    opponentNextTurnReady: false, // ★ 追加
 
     // 相手から受信した手札ステータス（危険度・じゃんけん枚数）
     opponentHandStat: {
@@ -263,6 +265,11 @@ async function handleConfirmDeckSelection() {
             gameState.opponentTurnChoice = choice;
             checkExecuteTurn();
         },
+        
+        onOpponentNextTurnReady: () => { // ★ 追加
+            onOpponentNextTurnReady();   // ★ 追加
+        },
+
         onOpponentRematchSame: () => {
             gameState.opponentRematchRequest = true;
             if (gameState.myRematchRequest) startRematchSequence();
@@ -839,19 +846,59 @@ function proceedToNextTurn() {
     gameState.turn += 1;
     refreshAllUI();
 
-    // ★ 補充された新しい手札ステータス（危険度・じゃんけん枚数）を相手へ再送信
+    // ★ 1. 自分の準備完了フラグを立て、相手へ新手札ステータス ＋ 準備完了通知を送信
+    gameState.myNextTurnReady = true;
     sendMyHandStatUpdate();
+    
+    if (gameState.p2pManager && gameState.p2pManager.sendNextTurnReady) {
+        gameState.p2pManager.sendNextTurnReady();
+    }
 
-    // ★ window.triggerTurnCutin を安全に呼び出すガード処理
-    const cutinFn = window.triggerTurnCutin || (typeof triggerTurnCutin !== 'undefined' ? triggerTurnCutin : null);
-    if (cutinFn) {
-        cutinFn(gameState.turn, () => {
+    // ★ 2. 相手がまだリザルトを見ている場合は「待機画面」を表示して画面をロック
+    if (!gameState.opponentNextTurnReady) {
+        const waitModal = document.getElementById('p2p-waiting-opponent-modal');
+        const waitText = document.getElementById('p2p-waiting-text');
+        const codeBox = document.getElementById('p2p-room-code-display-box');
+
+        if (codeBox) codeBox.classList.add('hidden');
+        if (waitText) waitText.innerText = "対戦相手の準備完了を待っています... ⏳";
+        if (waitModal) waitModal.classList.remove('hidden');
+    }
+
+    // ★ 3. 双方揃っているかチェックして開陣（カットイン）
+    checkStartNextTurnSequence();
+}
+
+// ★ 双方の準備が揃った時に「第2陣 開始！」カットインを流す関数
+function checkStartNextTurnSequence() {
+    if (gameState.myNextTurnReady && gameState.opponentNextTurnReady) {
+        gameState.myNextTurnReady = false;
+        gameState.opponentNextTurnReady = false;
+
+        // 待機画面を閉じる
+        const waitModal = document.getElementById('p2p-waiting-opponent-modal');
+        if (waitModal) waitModal.classList.add('hidden');
+
+        // カットイン再生 ➔ 30秒タイマースタート
+        const cutinFn = window.triggerTurnCutin || (typeof triggerTurnCutin !== 'undefined' ? triggerTurnCutin : null);
+        if (cutinFn) {
+            cutinFn(gameState.turn, () => {
+                if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
+            });
+        } else {
             if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
-        });
-    } else {
-        if (gameState.p2pManager) gameState.p2pManager.startTurnTimer();
+        }
     }
 }
+
+// ★ 相手から準備完了シグナルを受け取ったときの処理
+function onOpponentNextTurnReady() {
+    gameState.opponentNextTurnReady = true;
+    checkStartNextTurnSequence();
+}
+
+// 外部（battle_engine.js等）から呼び出せるように公開
+window.proceedToNextTurn = proceedToNextTurn;
 
 function handleRematchSameDeck() {
     gameState.myRematchRequest = true;
