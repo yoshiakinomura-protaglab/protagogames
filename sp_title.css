@@ -1,6 +1,6 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （ロゴ中央1.2倍 ＆ ボタン高統一 ＆ 3Dカード位置ボタン下端同期 確定版）
+ * （3Dカード本体位置引き上げ ＆ 下端ピッタリ同期 最終確定版）
  */
 
 @media (max-width: 767px) {
@@ -39,7 +39,7 @@
     /* --- 3. 画面中央：円形ロゴ（1.2倍拡大 ＆ 上下左右 完全中央配置） --- */
     #title-screen-component > div.relative.z-10.flex.flex-col {
         position: absolute !important;
-        top: 40% !important;               /* ボタン群と被らない位置へ少し上げ調整 */
+        top: 40% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) !important;
         margin: 0 !important;
@@ -50,7 +50,7 @@
     }
 
     #title-logo-img {
-        max-width: 360px !important;       /* 1.2倍サイズ */
+        max-width: 360px !important;
         width: 98vw !important;
         height: auto !important;
         margin: 0 auto !important;
@@ -100,33 +100,46 @@
     }
 
     #title-menu-container button i {
-        font-size: 14px !important;
+        font-size: 13px !important;
     }
 
-    /* --- 5. 下段右側：3Dカード（★ボタン群の下端 20px へ強制引き上げ） --- */
-    #title-screen-component > div:nth-child(3),
+    /* --- 5. 下段右側：3Dカード（カード本体・3D枠まで含めて強制引き上げ） --- */
+    
+    /* 親コンテナの配置強制 */
     #title-screen-component > div.absolute.right-8.bottom-12,
+    #title-screen-component > div[class*="right-8"],
     #title-screen-component > div[class*="bottom-12"] {
         position: absolute !important;
-        right: 12px !important;
-        bottom: 20px !important;          /* ★ ボタン群の下端20pxにピッタリ揃える */
+        right: 10px !important;
+        bottom: 20px !important;          /* ボタン群の下端20pxと合わせる */
         top: auto !important;
         left: auto !important;
         width: 38% !important;
-        height: auto !important;
+        height: 128px !important;         /* 親の高さも明示固定 */
         display: flex !important;
         justify-content: center !important;
-        align-items: flex-end !important; /* 下揃え */
+        align-items: flex-end !important;
         margin: 0 !important;
         z-index: 30 !important;
     }
 
-    /* 3Dカードの縦4:横3固定 */
-    #title-screen-component .perspective-1000 {
+    /* ★ 3D枠・カード本体の位置を下端（bottom: 0）に直接固定 */
+    #title-screen-component .perspective-1000,
+    #title-3d-card {
+        position: relative !important;
+        bottom: 0 !important;
+        top: auto !important;
+        margin-bottom: 0 !important;
         width: 96px !important;           /* 横幅96px */
-        height: 128px !important;         /* 縦幅128px (96 : 128 = 3 : 4) */
-        aspect-ratio: 3 / 4 !important;    /* 横3 : 縦4 */
-        max-width: 100% !important;
+        height: 128px !important;         /* 縦幅128px (縦4:横3) */
+        aspect-ratio: 3 / 4 !important;
+    }
+    
+    /* カード内の画像要素自体も親サイズにフィッティング */
+    #title-3d-card img,
+    #title-3d-card > div {
+        max-height: 100% !important;
+        object-fit: contain !important;
     }
 
     /* --- 6. モーダル群 --- */
