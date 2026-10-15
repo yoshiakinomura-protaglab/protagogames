@@ -1695,3 +1695,165 @@ if (document.readyState === 'loading') {
 } else {
     initGame();
 }
+
+// ==========================================
+// ★ カード詳細モーダル ＆ データ読み込み処理
+// ==========================================
+let retsudenMap = {};
+let tagsMap = {};
+let activeCardDetail = null;
+
+// tags.csv 読み込み
+async function loadTagsCSV() {
+    try {
+        const res = await fetch('tags.csv');
+        if (!res.ok) return;
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        if (lines.length <= 1) return;
+
+        const headers = lines[0].split(',').map(h => h.trim());
+        const tagIdx = headers.indexOf('tag');
+        const catIdx = headers.indexOf('category');
+        const rankIdx = headers.indexOf('rank');
+
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const cols = lines[i].split(',').map(c => c.trim());
+            const tagName = cols[tagIdx];
+            if (tagName) {
+                tagsMap[tagName] = {
+                    category: cols[catIdx] || 'OTHERS',
+                    rank: (cols[rankIdx] || 'C').toUpperCase()
+                };
+            }
+        }
+    } catch (e) {}
+}
+
+// retsuden.csv 読み込み
+async function loadRetsudenCSV() {
+    try {
+        const res = await fetch('retsuden.csv');
+        if (!res.ok) return;
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        if (lines.length <= 1) return;
+
+        const headers = lines[0].split(',').map(h => h.trim());
+        const idIdx = headers.indexOf('id');
+        const textIdx = headers.indexOf('text');
+
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const cols = lines[i].split(',').map(c => c.trim());
+            if (idIdx !== -1 && textIdx !== -1) {
+                retsudenMap[cols[idIdx]] = cols[textIdx];
+            }
+        }
+    } catch (e) {}
+}
+
+// カード詳細モーダルオープン関数
+window.openCardDetail = function(cardId, event) {
+    if (event) event.stopPropagation(); // 手札選択のカードタップイベントを発火させない
+    const card = gameState.allCards.find(c => String(c.id) === String(cardId));
+    if (!card) return;
+
+    activeCardDetail = card;
+
+    const modal = document.getElementById('modal-card-detail');
+    const nameEl = document.getElementById('detail-card-name');
+    const famousEl = document.getElementById('detail-card-famous');
+    const jankenEl = document.getElementById('detail-card-janken');
+    const pokerEl = document.getElementById('detail-card-poker');
+    const imgEl = document.getElementById('detail-card-img');
+    const tagsEl = document.getElementById('detail-card-tags');
+    const retsudenEl = document.getElementById('detail-card-retsuden');
+
+    if (nameEl) nameEl.innerText = card.name || '英傑';
+
+    const rawPower = card.power !== undefined ? card.power : (card.famous !== undefined ? card.famous : 0);
+    if (famousEl) famousEl.innerText = rawPower;
+
+    const jankenMap = {
+        gu: { emoji: '✊', label: 'グー', color: 'bg-rose-950 text-rose-300 border-rose-600' },
+        cho: { emoji: '✌️', label: 'チョキ', color: 'bg-amber-950 text-amber-300 border-amber-600' },
+        pa: { emoji: '✋', label: 'パー', color: 'bg-emerald-950 text-emerald-300 border-emerald-600' }
+    };
+    const jInfo = jankenMap[card.janken] || { emoji: '❓', label: '不明', color: 'bg-slate-900 text-slate-400 border-slate-700' };
+    if (jankenEl) {
+        jankenEl.innerHTML = `
+            <div class="flex items-center gap-1 px-2 py-0.5 rounded-lg border ${jInfo.color} font-bold text-xs shadow-md">
+                <span>${jInfo.emoji}</span>
+                <span>${jInfo.label}</span>
+            </div>
+        `;
+    }
+
+    if (pokerEl) {
+        const r = String(card.rank || '1').toUpperCase();
+        const displayRank = (r === 'JOKER' || r === 'JK') ? 'JK' : r;
+        pokerEl.innerHTML = `
+            <div class="flex items-center gap-1 px-2 py-0.5 rounded-lg border bg-amber-950/80 border-amber-500/70 text-amber-300 font-mono font-black text-xs shadow-md">
+                <span class="text-[10px] text-amber-400/80 font-sans">手札:</span>
+                <span class="text-xs text-yellow-300">${displayRank}</span>
+            </div>
+        `;
+    }
+
+    if (imgEl) {
+        const imgName = (gameState.displayMode === 'real' ? card.imageReal : card.imageIllust) || `${card.id}_illust.jpg`;
+        imgEl.src = `images/${imgName}`;
+    }
+
+    if (tagsEl) {
+        const rawTags = String(card.tags || card.tag || '');
+        const tagList = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+
+        if (tagList.length === 0) {
+            tagsEl.innerHTML = `<span class="text-xs text-slate-500 italic col-span-2">タグなし</span>`;
+        } else {
+            const catColors = {
+                GEN: 'bg-slate-950/90 border-slate-700 text-slate-200',
+                ATK: 'bg-rose-950/90 border-rose-600/80 text-rose-200',
+                DEF: 'bg-sky-950/90 border-sky-600/80 text-sky-200',
+                SUP: 'bg-amber-950/90 border-amber-600/80 text-amber-200',
+                DEB: 'bg-purple-950/90 border-purple-600/80 text-purple-200'
+            };
+
+            tagsEl.innerHTML = tagList.map(tagName => {
+                const meta = tagsMap[tagName] || { category: 'GEN', rank: 'C' };
+                const colorClass = catColors[meta.category] || catColors.GEN;
+                const rankText = meta.rank ? `(${meta.rank})` : '';
+
+                return `
+                    <div class="flex items-center justify-between text-xs font-bold border px-2 py-0.5 rounded-lg ${colorClass} shadow-sm truncate">
+                        <span class="truncate">${tagName} <span class="font-mono text-[10px] opacity-80">${rankText}</span></span>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    if (retsudenEl) {
+        retsudenEl.innerText = retsudenMap[card.id] || "（列伝テキスト準備中）";
+    }
+
+    modal?.classList.remove('hidden');
+};
+
+// モーダルイベント初期化
+document.addEventListener('DOMContentLoaded', () => {
+    loadTagsCSV();
+    loadRetsudenCSV();
+
+    document.getElementById('btn-close-detail-modal')?.addEventListener('click', () => {
+        document.getElementById('modal-card-detail')?.classList.add('hidden');
+    });
+
+    document.getElementById('btn-detail-toggle-img')?.addEventListener('click', () => {
+        gameState.displayMode = gameState.displayMode === 'illust' ? 'real' : 'illust';
+        if (activeCardDetail) window.openCardDetail(activeCardDetail.id);
+    });
+});

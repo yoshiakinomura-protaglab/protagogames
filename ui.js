@@ -116,8 +116,13 @@ export function createCardHTML(card, options = {}) {
     <div class="card-container relative w-full bg-slate-900 border-2 ${selectedClasses} rounded-xl p-1.5 flex flex-col justify-between shadow-xl cursor-pointer overflow-hidden select-none" 
          data-action="${dataAction}" 
          data-id="${card.id}">
+
+        <!-- 虫眼鏡（詳細表示）ボタン -->
+        <button onclick="window.openCardDetail('${card.id}', event)" class="absolute top-1 right-1 bg-slate-950/90 border border-amber-400 text-amber-300 w-5 h-5 rounded-full flex items-center justify-center text-[10px] hover:scale-110 z-30 cursor-pointer shadow-md">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
         
-        <!-- ★ カード名：font-black を外して font-normal (大きいサイズ維持) へ変更 -->
+        <!-- ★ カード名... -->
         <div class="flex items-center justify-between gap-1 bg-slate-950/90 border border-slate-800 p-1 rounded-lg mb-1 pointer-events-none flex-shrink-0">
             <h4 class="font-normal text-sm sm:text-base text-slate-100 font-yuji truncate flex-1 leading-tight tracking-wide">${card.name || '英傑'}</h4>
             <span class="text-xs px-1.5 py-0.5 rounded border ${jInfo.color} font-black shadow-inner flex-shrink-0">${jInfo.label}</span>

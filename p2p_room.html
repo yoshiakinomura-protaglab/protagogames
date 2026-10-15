@@ -467,6 +467,61 @@
             </button>
         </div>
     </div>
-    
+<!-- 虫眼鏡タップ用 カード詳細 Modal -->
+    <div id="modal-card-detail" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[999999] hidden transition-opacity select-none">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-4 sm:p-5 max-w-2xl w-11/12 shadow-2xl relative flex flex-col gap-3 sm:gap-4 max-h-[90vh] overflow-y-auto">
+            <button id="btn-close-detail-modal" class="absolute top-3.5 right-3.5 text-slate-400 hover:text-white text-xl z-10 cursor-pointer transition-transform hover:scale-110">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <!-- カード画像 ＆ 右側ステータス情報 -->
+            <div class="grid grid-cols-12 gap-3 sm:gap-4 items-start">
+                <!-- 左側：カード画像 -->
+                <div class="col-span-5 sm:col-span-4 aspect-[3/4] rounded-xl border-2 border-amber-500/60 overflow-hidden bg-slate-950 relative shadow-xl flex-shrink-0">
+                    <img id="detail-card-img" src="images/default.jpg" class="w-full h-full object-cover object-top">
+                    <button id="btn-detail-toggle-img" class="absolute bottom-1.5 right-1.5 bg-slate-950/90 border border-amber-400 text-amber-300 text-[10px] px-2 py-0.5 rounded-md font-bold cursor-pointer hover:scale-105 shadow-md">
+                        資料へ
+                    </button>
+                </div>
+
+                <!-- 右側：ステータス詳細エリア -->
+                <div class="col-span-7 sm:col-span-8 space-y-2 text-left flex flex-col justify-between">
+                    <div class="border-b border-slate-800 pb-1">
+                        <h3 id="detail-card-name" class="text-lg sm:text-2xl font-black text-yellow-300 font-yuji leading-tight tracking-wide">
+                            -
+                        </h3>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs sm:text-sm font-bold text-slate-400">有名度:</span>
+                        <span id="detail-card-famous" class="text-lg sm:text-2xl font-black font-sans text-amber-300 tracking-wider gold-text">
+                            -
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800/90 shadow-inner">
+                        <div id="detail-card-janken" class="flex items-center"></div>
+                        <span class="text-slate-700 text-xs font-bold">|</span>
+                        <div id="detail-card-poker" class="flex items-center"></div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <span class="text-xs font-bold text-slate-400 block">特性タグ:</span>
+                        <div id="detail-card-tags" class="grid grid-cols-2 gap-1 max-h-28 overflow-y-auto pr-0.5"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 人物列伝 -->
+            <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-2.5 text-left shadow-inner">
+                <div class="text-xs font-bold text-amber-400 font-yuji mb-1 flex items-center gap-1.5">
+                    <i class="fa-solid fa-scroll text-amber-500"></i> 人物列伝
+                </div>
+                <p id="detail-card-retsuden" class="text-xs text-slate-300 leading-relaxed min-h-[45px] max-h-28 overflow-y-auto">
+                    読み込み中...
+                </p>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

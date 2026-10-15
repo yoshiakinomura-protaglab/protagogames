@@ -474,11 +474,20 @@
         overflow: hidden !important;
     }
 
-    /* 不要なテキスト・バッジ非表示 */
+    /* 不要なテキスト・バッジ非表示（buttonは表示保持） */
     #player-hand-container .card-container > div:first-child,
     #player-hand-container .card-container > div:last-child,
     #player-hand-container .card-container > div.relative > div {
         display: none !important;
+    }
+
+    /* 虫眼鏡ボタンの位置調整と前面表示保証 */
+    #player-hand-container .card-container > button {
+        display: flex !important;
+        position: absolute !important;
+        top: 3px !important;
+        right: 3px !important;
+        z-index: 30 !important;
     }
 
     /* カード画像ラッパーおよび画像本体 */
