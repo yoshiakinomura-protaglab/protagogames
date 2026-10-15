@@ -1,6 +1,6 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （3Dカード本体位置引き上げ ＆ 下端ピッタリ同期 最終確定版）
+ * （title.html構造完全精査・3Dカード下端位置100%同期版）
  */
 
 @media (max-width: 767px) {
@@ -103,43 +103,40 @@
         font-size: 13px !important;
     }
 
-    /* --- 5. 下段右側：3Dカード（カード本体・3D枠まで含めて強制引き上げ） --- */
+    /* --- 5. ★ 下段右側：3Dカード展示エリア（完全位置同期補正） --- */
     
-    /* 親コンテナの配置強制 */
-    #title-screen-component > div.absolute.right-8.bottom-12,
-    #title-screen-component > div[class*="right-8"],
-    #title-screen-component > div[class*="bottom-12"] {
+    /* ① 最外枠コンテナ（画面右下に絶対配置） */
+    #title-screen-component > div.absolute.right-8 {
         position: absolute !important;
-        right: 10px !important;
-        bottom: 20px !important;          /* ボタン群の下端20pxと合わせる */
+        right: 12px !important;
+        bottom: 20px !important;          /* 左側ボタン群と全く同じ下端 20px */
         top: auto !important;
         left: auto !important;
-        width: 38% !important;
-        height: 128px !important;         /* 親の高さも明示固定 */
+        width: 36% !important;
+        height: 128px !important;         /* 高さを明示指定 */
         display: flex !important;
         justify-content: center !important;
-        align-items: flex-end !important;
+        align-items: flex-end !important; /* 下揃え */
         margin: 0 !important;
         z-index: 30 !important;
     }
 
-    /* ★ 3D枠・カード本体の位置を下端（bottom: 0）に直接固定 */
-    #title-screen-component .perspective-1000,
-    #title-3d-card {
-        position: relative !important;
-        bottom: 0 !important;
-        top: auto !important;
-        margin-bottom: 0 !important;
-        width: 96px !important;           /* 横幅96px */
-        height: 128px !important;         /* 縦幅128px (縦4:横3) */
+    /* ② 3D遠近感コンテナ（w-44 による巨大化を上書き） */
+    #title-screen-component > div.absolute.right-8 > div.perspective-1000 {
+        width: 96px !important;           /* カード幅 96px */
+        height: 128px !important;         /* カード高さ 128px (縦4:横3) */
         aspect-ratio: 3 / 4 !important;
-    }
-    
-    /* カード内の画像要素自体も親サイズにフィッティング */
-    #title-3d-card img,
-    #title-3d-card > div {
+        max-width: 100% !important;
         max-height: 100% !important;
-        object-fit: contain !important;
+        display: flex !important;
+        align-items: flex-end !important;
+    }
+
+    /* ③ JSの回転軸を下端中心に固定（JSによる位置下がりを物理リセット） */
+    #title-3d-card {
+        width: 100% !important;
+        height: 100% !important;
+        transform-origin: bottom center !important; /* ★ 回転軸を下端に固定 */
     }
 
     /* --- 6. モーダル群 --- */
