@@ -569,6 +569,16 @@ function showTurnResultModal(playerCards, cpuCards, battleResult, gameState, vie
         } else {
             nextBtn.innerText = '次のターンへ進む ➔';
         }
+
+        // ★ クリック時に proceedToNextTurn を確実に呼び出すようにボタンへ登録
+        nextBtn.onclick = (e) => {
+            e.preventDefault();
+            if (window.proceedToNextTurn) {
+                window.proceedToNextTurn();
+            } else if (typeof proceedToNextTurn === 'function') {
+                proceedToNextTurn();
+            }
+        };
     }
 
     modal.classList.remove('hidden');
