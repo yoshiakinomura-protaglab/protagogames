@@ -879,6 +879,12 @@ function checkStartNextTurnSequence() {
         const waitModal = document.getElementById('p2p-waiting-opponent-modal');
         if (waitModal) waitModal.classList.add('hidden');
 
+        const resultModal = document.getElementById('turn-result-modal'); // ★ 追加
+        if (resultModal) {                                                // ★ 追加
+            resultModal.style.display = '';                               // ★ 追加
+            resultModal.classList.add('hidden');                          // ★ 追加
+        }                                                                 // ★ 追加
+
         // カットイン再生 ➔ 30秒タイマースタート
         const cutinFn = window.triggerTurnCutin || (typeof triggerTurnCutin !== 'undefined' ? triggerTurnCutin : null);
         if (cutinFn) {
