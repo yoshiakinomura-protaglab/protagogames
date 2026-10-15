@@ -1,11 +1,11 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （Tailwind CDN用 セレクタ完全修正版）
+ * （ロゴ1.2倍拡大・画面中央配置 ＆ ボタン高さ統一 ＆ カード縦4:横3固定 確定版）
  */
 
 @media (max-width: 767px) {
 
-    /* --- 1. 画面全体の溢れ防止 ＆ 基準化 --- */
+    /* --- 1. 画面全体の溢れ防止 --- */
     html, body {
         height: 100dvh !important;
         overflow: hidden !important;
@@ -19,8 +19,7 @@
     }
 
     /* --- 2. 最上段ヘッダー（時代・表示切替：右上維持） --- */
-    #title-screen-component > div.absolute.top-6.right-6,
-    #title-screen-component > div[class*="top-6"][class*="right-6"] {
+    #title-screen-component > div.absolute.top-6.right-6 {
         position: absolute !important;
         top: 10px !important;
         right: 10px !important;
@@ -31,86 +30,86 @@
 
     #select-title-gen,
     #btn-toggle-title-mode {
-        padding: 4px 8px !important;
+        padding: 5px 9px !important;
         font-size: 11px !important;
         border-radius: 8px !important;
     }
 
-    /* --- 3. 画面中央：1:1 円形ロゴ（ドカンと大きく表示） --- */
+    /* --- 3. 画面中央：円形ロゴ（1.2倍に拡大 ＆ 上下左右 完全中央配置） --- */
     #title-screen-component > div.relative.z-10.flex.flex-col {
-        position: relative !important;
-        margin-left: 0 !important;
-        margin-top: 35px !important;
+        position: absolute !important;
+        top: 42% !important;               /* ロゴ拡大に伴い中央軸を微調整 */
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        margin: 0 !important;
         width: 100% !important;
         align-items: center !important;
-        justify-content: flex-start !important;
+        justify-content: center !important;
+        z-index: 10 !important;
     }
 
     #title-logo-img {
-        max-width: 285px !important;       /* ロゴを中央で大きく表示 */
-        width: 80vw !important;
+        max-width: 360px !important;       /* ★ 300px ➔ 360px (1.2倍拡大) */
+        width: 98vw !important;            /* ★ 82vw ➔ 98vw (画面幅いっぱいまで解放) */
         height: auto !important;
         margin: 0 auto !important;
         display: block !important;
+        flex-shrink: 0 !important;
     }
 
-    /* --- 4. 下段左側：メニューボタン群（確実な属性セレクタで左下固定） --- */
-    #title-screen-component div[class*="w-[380px]"],
-    #title-screen-component div[class*="w-"],
-    #title-menu-container {
-        max-width: 54% !important;
-    }
-
-    /* ボタン群ラッパーの配置強制指定 */
-    #title-screen-component > div.relative.z-10.flex.flex-col > div[class*="w-"] {
+    /* --- 4. 下段左側：メニューボタン群（高さ44px統一） --- */
+    #title-screen-component .w-\[380px\] {
         position: absolute !important;
-        left: 12px !important;
+        left: 10px !important;
         bottom: 20px !important;          /* 下端20px */
-        width: 54% !important;
+        width: 58% !important;
+        max-width: 58% !important;
         margin: 0 !important;
         z-index: 30 !important;
     }
 
     #title-menu-container {
         width: 100% !important;
+        max-width: 100% !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 6px !important;
+        gap: 8px !important;
     }
 
-    /* バッジ非表示 */
+    /* 不要バッジの非表示 */
     #title-menu-container button > span.text-\[10px\],
-    #title-menu-container button span.text-\[10px\],
-    #title-menu-container button span[class*="text-[10px]"] {
+    #title-menu-container button span.text-\[10px\] {
         display: none !important;
     }
 
     /* ボタン本体 */
     #title-menu-container button {
-        padding: 8px 10px !important;
+        padding: 10px 12px !important;
+        min-height: 44px !important;
         border-radius: 10px !important;
-        font-size: 12px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: flex-start !important;
-        gap: 6px !important;
+        gap: 8px !important;
         width: 100% !important;
+        box-sizing: border-box !important;
         box-shadow: 0 4px 10px rgba(0,0,0,0.6) !important;
     }
 
     #title-menu-container button i {
-        font-size: 13px !important;
+        font-size: 14px !important;
     }
 
-    /* --- 5. 下段右側：3Dカード（確実な属性セレクタで右下固定） --- */
-    #title-screen-component > div[class*="bottom-12"],
-    #title-screen-component > div[class*="right-8"] {
+    /* --- 5. 下段右側：3Dカード（縦4：横3 比率固定） --- */
+    #title-screen-component > div.absolute.right-8.bottom-12 {
         position: absolute !important;
-        right: 12px !important;
-        bottom: 20px !important;          /* ボタン群と同じ下端20pxに同期 */
+        right: 10px !important;
+        bottom: 20px !important;          /* ボタン群の下端20pxと一致 */
         left: auto !important;
         top: auto !important;
-        width: 40% !important;
+        width: 38% !important;
         display: flex !important;
         justify-content: center !important;
         align-items: flex-end !important;
@@ -118,10 +117,11 @@
         z-index: 30 !important;
     }
 
-    #title-screen-component .perspective-1000,
-    #title-screen-component div[class*="perspective"] {
-        width: 95px !important;
-        height: 126px !important;
+    #title-screen-component .perspective-1000 {
+        width: 96px !important;           /* 横幅96px */
+        height: 128px !important;         /* 縦幅128px (96 : 128 = 3 : 4) */
+        aspect-ratio: 3 / 4 !important;    /* 横3 : 縦4 */
+        max-width: 100% !important;
     }
 
     /* --- 6. モーダル群 --- */
