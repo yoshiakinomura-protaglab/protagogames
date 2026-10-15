@@ -1,23 +1,28 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （中央ロゴ拡大 ＆ ボタン小型化 ＆ 3Dカード右横並び完全対応版）
+ * （中央ロゴドカン拡大 ＆ 下段左右分割：左ボタン・右3Dカード完全固定版）
  */
 
 @media (max-width: 767px) {
 
-    /* --- 1. 全体画面構造の制御 --- */
+    /* --- 1. 画面全体コンテナ --- */
+    body {
+        height: 100dvh !important;
+        overflow: hidden !important;
+    }
+
     #title-screen-component {
-        padding: 10px 16px !important;
+        padding: 10px 12px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: space-between !important;
         align-items: center !important;
         height: 100dvh !important;
         position: relative !important;
-        overflow: hidden !important;
+        box-sizing: border-box !important;
     }
 
-    /* --- 2. 最上段ヘッダー（右揃え） --- */
+    /* --- 2. 最上段ヘッダー（時代・表示切替を右寄せ） --- */
     #title-screen-component > div.absolute.top-6.right-6 {
         position: relative !important;
         top: 0 !important;
@@ -28,6 +33,7 @@
         align-items: center !important;
         gap: 6px !important;
         z-index: 30 !important;
+        flex-shrink: 0 !important;
     }
 
     #select-title-gen,
@@ -37,7 +43,7 @@
         border-radius: 8px !important;
     }
 
-    /* --- 3. 中央ロゴ（画面中央に大きくドカン！） --- */
+    /* --- 3. 画面中央：中央ロゴをドカンと大きく表示 --- */
     #title-screen-component > div.relative.z-10.flex.flex-col {
         position: relative !important;
         margin-left: 0 !important;
@@ -47,63 +53,75 @@
         align-items: center !important;
         justify-content: center !important;
         flex: 1 !important;
+        min-height: 0 !important;
     }
 
+    /* 1:1円形ロゴを拡大 */
     #title-logo-img {
-        max-width: 290px !important; /* ★ ロゴを中央に大きくドカンと拡大 */
-        width: 80vw !important;
+        max-width: 260px !important;
+        width: 75vw !important;
         height: auto !important;
         margin: 0 auto !important;
+        display: block !important;
     }
 
-    /* --- 4. 下段エリア（ボタン群[左] ＋ 3Dカード[右] の横並び配置） --- */
-    
-    /* 下段ラッパー全体の絶対配置を解除しフレックス横並び化 */
+    /* PC版にあった不要な余白ラッパーの消去 */
     #title-screen-component .w-\[380px\] {
         width: 100% !important;
-        margin-bottom: 8px !important;
-    }
-
-    /* 左: ボタン群 (60%) ｜ 右: 3Dカード (40%) の並列配置 */
-    #title-screen-component > div.relative.z-10.flex.flex-col {
-        justify-content: flex-start !important;
-    }
-
-    /* 下部コンテンツコンテナを無理やり絶対配置から下の横並びブロックへ差し替え */
-    #title-menu-container {
-        width: 58% !important;
-        max-width: 58% !important;
-        gap: 6px !important;
         margin: 0 !important;
     }
 
-    /* ★ ボタン内の右端バッジ（コインGET / 通信対戦 / 10枠保存可）を完全非表示 */
-    #title-menu-container button > span.text-\[10px\] {
+    /* --- 4. 下段：ボタン（左55%） ＆ 3Dカード（右45%） 横並びエリア --- */
+
+    /* 下段全体を横並びブロック化 */
+    #title-screen-component > div.relative.z-10.flex.flex-col > div.w-\[380px\] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        gap: 8px !important;
+    }
+
+    /* 左側：メニューボタン群 */
+    #title-menu-container {
+        width: 58% !important;
+        max-width: 58% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 6px !important;
+    }
+
+    /* ★ ボタン内の不必要なバッジ（「コインGET」「通信対戦」等）を完全非表示 */
+    #title-menu-container button span.text-\[10px\] {
         display: none !important;
     }
 
-    /* ★ ボタン本体のコンパクト化（スリムでスッキリしたデザインへ） */
+    /* ★ ボタンのコンパクト化（小さくスマートに） */
     #title-menu-container button {
-        padding: 8px 12px !important;
+        padding: 8px 10px !important;
         border-radius: 10px !important;
         font-size: 12px !important;
+        display: flex !important;
+        align-items: center !important;
         justify-content: flex-start !important;
-        gap: 8px !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
+        gap: 6px !important;
+        width: 100% !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.6) !important;
     }
 
     #title-menu-container button i {
         font-size: 13px !important;
     }
 
-    /* ★ 3Dカード（ボタンのすぐ右横へ配置） */
+    /* 右側：3Dカード（ボタンのすぐ右側に配置） */
     #title-screen-component > div.absolute.right-8.bottom-12 {
-        position: absolute !important;
-        right: 12px !important;
-        bottom: 20px !important;
+        position: relative !important;
+        right: 0 !important;
+        bottom: 0 !important;
         left: auto !important;
         top: auto !important;
-        width: 38% !important;
+        width: 40% !important;
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
@@ -112,10 +130,11 @@
     }
 
     #title-screen-component .perspective-1000 {
-        width: 100px !important; /* ★ 右隣に綺麗に収まるカードサイズ */
+        width: 95px !important; /* ボタン横に収まる適切なカード幅 */
+        height: auto !important;
     }
 
-    /* --- 5. モーダル群のスマホフィット補正 --- */
+    /* --- 5. モーダル群のスマホ幅調整 --- */
     #opponent-select-modal > div,
     #modal-select-deck > div,
     #modal-vs-confirm > div,
