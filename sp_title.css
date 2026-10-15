@@ -1,6 +1,6 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （#title-3d-card 親要素狙い撃ち・位置完全同期 確定版）
+ * （カード位置固定・ボタン側を下へ合わせて同期する最終最適解版）
  */
 
 @media (max-width: 767px) {
@@ -13,7 +13,7 @@
     }
 
     #title-screen-component {
-        padding: 10px 12px 60px 12px !important;
+        padding: 10px 12px !important; /* 底上げを解除し自然な状態へ */
         height: 100dvh !important;
         position: relative !important;
         box-sizing: border-box !important;
@@ -59,11 +59,11 @@
         flex-shrink: 0 !important;
     }
 
-    /* --- 4. 下段左側：メニューボタン群（底上げライン：bottom: 60px） --- */
+    /* --- 4. 下段左側：メニューボタン群（★カードの底辺に合わせて下げる） --- */
     #title-screen-component .w-\[380px\] {
         position: absolute !important;
         left: 10px !important;
-        bottom: 60px !important;          /* 下から60px */
+        bottom: 35px !important;          /* ★ 3Dカードの見た目の下端（約35px）へ同調 */
         width: 58% !important;
         max-width: 58% !important;
         margin: 0 !important;
@@ -78,7 +78,7 @@
         gap: 8px !important;
     }
 
-    /* 不要バッジ非表示 */
+    /* 不要バッジの非表示 */
     #title-menu-container button > span.text-\[10px\],
     #title-menu-container button span.text-\[10px\] {
         display: none !important;
@@ -104,28 +104,14 @@
         font-size: 13px !important;
     }
 
-    /* --- 5. ★ 下段右側：3Dカード（#title-3d-card の2つ上の親コンテナを確実に移動） --- */
-    #title-3d-card {
-        /* JS回転の中心軸を維持 */
-        transform-origin: center center !important;
-    }
-
-    /* カードを包む一番外側の絶対配置コンテナ（#title-3d-cardから遡って直接狙い撃ち） */
-    #title-screen-component:has(#title-3d-card) > div:last-child,
-    div:has(> div > #title-3d-card) {
-        position: absolute !important;
-        right: 12px !important;
-        bottom: 60px !important;          /* ★ ボタン群と全く同じ bottom: 60px を強制適用 */
-        top: auto !important;
-        left: auto !important;
+    /* --- 5. ★ 下段右側：3Dカード（位置はHTMLに委ね、サイズのみスマホ用に縮小） --- */
+    
+    /* 3D枠のサイズだけをスマホ用に縮小（位置や回転軸は一切いじらない） */
+    #title-screen-component .perspective-1000 {
+        width: 96px !important;           /* スマホ画面に収まる横幅 */
+        height: auto !important;
+        aspect-ratio: 3 / 4 !important;    /* 縦4:横3 比率 */
         margin: 0 !important;
-        z-index: 30 !important;
-    }
-
-    /* 遠近感枠のサイズ調整 */
-    .perspective-1000 {
-        width: 90px !important;
-        height: 120px !important;
     }
 
     /* --- 6. モーダル群 --- */
