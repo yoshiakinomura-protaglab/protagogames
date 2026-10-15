@@ -1,0 +1,542 @@
+/**
+ * sp_battle.css - バトル画面 スマホ縦持ち最適化 CSS
+ * （敵陣じゃんけん残り枠 1列・横並び最適化版）
+ */
+
+@media (max-width: 767px) {
+
+    /* --- 1. 画面全体の固定 ＆ 溢れ防止 --- */
+    html, body {
+        height: 100dvh !important;
+        width: 100vw !important;
+        overflow: hidden !important;
+        background: #000000 !important;
+    }
+
+    body {
+        padding: 0 !important;
+        margin: 0 !important;
+        justify-content: flex-start !important;
+    }
+
+    /* --- 2. HEADER（2列・2段構造 ＆ 高さ30px・左右完全同期） --- */
+    header {
+        padding: 4px 8px !important;
+        background: rgba(5, 4, 10, 0.95) !important;
+        flex-shrink: 0 !important;
+    }
+
+    header > div {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        grid-template-rows: 30px 30px !important;
+        gap: 4px 6px !important;
+        align-items: center !important;
+        position: relative !important;
+    }
+
+    /* 【1段目・左】タイトル画像 */
+    header > div > div:first-child {
+        grid-column: 1 / 2 !important;
+        grid-row: 1 / 2 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 30px !important;
+    }
+
+    header > div > div:first-child img {
+        height: 30px !important;
+        max-height: 30px !important;
+        width: auto !important;
+        object-fit: contain !important;
+        object-position: left center !important;
+    }
+
+    /* 【2段目・左】タイマー */
+    #turn-timer-display,
+    [id*="timer"] {
+        grid-column: 1 / 2 !important;
+        grid-row: 2 / 3 !important;
+        margin: 0 !important;
+        padding: 0 8px !important;
+        font-size: 11px !important;
+        border-radius: 8px !important;
+        height: 30px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        box-sizing: border-box !important;
+        justify-self: start !important;
+    }
+
+    /* 【1段目・右】合戦進行 ＆ イラスト切替ボタン */
+    header > div > div:last-child {
+        grid-column: 2 / 3 !important;
+        grid-row: 1 / 2 !important;
+        justify-self: end !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        height: 30px !important;
+    }
+
+    header > div > div:last-child > div {
+        padding: 0 8px !important;
+        font-size: 11px !important;
+        border-radius: 8px !important;
+        height: 30px !important;
+        display: flex !important;
+        align-items: center !important;
+        box-sizing: border-box !important;
+    }
+
+    #current-turn-num + span,
+    header > div > div:last-child > div > span:last-child {
+        display: none !important;
+    }
+
+    #img-mode-label {
+        display: none !important;
+    }
+
+    #btn-toggle-img-mode {
+        padding: 0 10px !important;
+        font-size: 13px !important;
+        border-radius: 8px !important;
+        height: 30px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 【2段目・右】戦闘開始ボタン */
+    header > div > div.absolute {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
+        grid-column: 2 / 3 !important;
+        grid-row: 2 / 3 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        justify-self: end !important;
+        height: 30px !important;
+    }
+
+    #btn-battle-start {
+        padding: 0 8px !important;
+        font-size: 11px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        border-radius: 8px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+    }
+
+/* --- 3. MAIN AREA（全エリアの隙間を4pxに完全統一） --- */
+    main {
+        padding: 4px !important;
+        gap: 4px !important;
+        flex: 1 !important;
+        height: calc(100dvh - 70px) !important;
+        overflow: hidden !important;
+    }
+
+    #tab-battle {
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        gap: 4px !important;                   /* ★ 全ブロック間の隙間を均等に4pxへ統一 */
+    }
+
+    /* 対峙エリア（敵軍＋自軍） */
+    #tab-battle > div.grid-cols-1 {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 4px !important;                   /* ★ 敵軍と自軍の間の隙間も4px */
+        flex: 0 0 auto !important;             /* 敵軍・自軍の高さは内容ピッタリに固定 */
+        min-height: 0 !important;
+    }
+    
+/* --- 4. 敵陣エリア（全体の高さ最小化 ＆ 左右底辺完全フラット同期版） --- */
+    #tab-battle > div.grid-cols-1 > div:first-child {
+        padding: 4px 6px !important;
+        border-radius: 12px !important;
+        flex: 0 0 auto !important;           /* ★ 敵陣エリア全体の縦伸びをブロック */
+        height: auto !important;
+    }
+
+    /* メイン対峙エリア：左右の高さ（底辺）を完全に同期 */
+    #tab-battle > div.grid-cols-1 > div:first-child > div.grid-cols-12 {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: stretch !important;     /* 左右の底辺ラインを完全一致 */
+        gap: 6px !important;
+        margin: 0 !important;
+        height: auto !important;
+    }
+
+    /* 左側：武将画像枠（幅を約80pxに固定して画像高さ自体をコンパクト化） */
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-4 {
+        width: 82px !important;             /* ★ 画像幅を小さく固定して全体の高さを抑制 */
+        min-width: 82px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-4 > div {
+        width: 100% !important;
+        aspect-ratio: 3 / 4 !important;    /* ★ 縦4 : 横3 絶対キープ */
+        border-radius: 8px !important;
+        display: flex !important;
+        overflow: hidden !important;
+    }
+
+    #cpu-joker-img {
+        width: 100% !important;
+        height: 100% !important;
+        aspect-ratio: 3 / 4 !important;
+        object-fit: cover !important;
+        object-position: top center !important;
+    }
+
+    /* 右側カラム：幅は残りを一杯に使用（flex: 1）し、高さは左画像と完全同期 */
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 {
+        flex: 1 !important;
+        width: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        gap: 3px !important;
+        height: auto !important;
+        align-self: stretch !important;    /* ★ 底辺を武将画像の下端と1pxも狂わず一致 */
+    }
+
+    /* 敵軍総大将ボックス（コンパクトな余剰高さにジャストフィット） */
+    #cpu-joker-box {
+        padding: 2px 4px !important;
+        margin-bottom: 0 !important;
+        flex: 1 1 0% !important;             /* ★ 画像の高さに合わせて必要最小限に伸縮 */
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;  /* 上下中央揃え */
+        align-items: center !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    #cpu-joker-name {
+        line-height: 1.1 !important;
+        margin-top: 1px !important;
+        font-size: 1.15rem !important;       /* 全体縮小に合わせたフォントサイズ */
+    }
+
+    #cpu-danger-level {
+        margin-top: 1px !important;
+        font-size: 9px !important;
+    }
+
+    /* じゃんけん残り枚数ボックス（最下部に完全固定） */
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 > div.bg-slate-950\/90 {
+        padding: 2px 3px !important;
+        border-radius: 6px !important;
+        flex: 0 0 auto !important;
+        margin-top: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 3分割グリッド */
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 > div.bg-slate-950\/90 .grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 2px !important;
+        width: 100% !important;
+    }
+
+    /* 各じゃんけんボタン本体 */
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 > div.bg-slate-950\/90 .grid > div {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 2px !important;
+        padding: 3px 1px !important;
+        border-radius: 5px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 元テキスト隠し */
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 > div.bg-slate-950\/90 .grid > div > span:first-child {
+        font-size: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+    }
+
+    /* 疑似要素(::before)で絵文字復元 */
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 > div.bg-slate-950\/90 .grid > div:nth-child(1) > span:first-child::before {
+        content: "✊" !important;
+        font-size: 11px !important;
+    }
+
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 > div.bg-slate-950\/90 .grid > div:nth-child(2) > span:first-child::before {
+        content: "✌️" !important;
+        font-size: 11px !important;
+    }
+
+    #tab-battle > div.grid-cols-1 > div:first-child .col-span-8 > div.bg-slate-950\/90 .grid > div:nth-child(3) > span:first-child::before {
+        content: "✋" !important;
+        font-size: 11px !important;
+    }
+
+    /* 枚数数値 */
+    #cpu-deck-gu,
+    #cpu-deck-cho,
+    #cpu-deck-pa {
+        font-size: 10px !important;
+        font-weight: 900 !important;
+        line-height: 1 !important;
+        margin-left: 1px !important;
+    }
+/* --- 5. 自軍計算機エリア（じゃんけんID直接非表示版） --- */
+    #tab-battle > div.grid-cols-1 > div:last-child {
+        padding: 5px !important;
+        border-radius: 12px !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* 黒い下敷き（背景枠）コンテナ */
+    #tab-battle > div.grid-cols-1 > div:last-child > div.bg-slate-950\/90,
+    #tab-battle > div.grid-cols-1 > div:last-child div.bg-slate-950\/80 {
+        height: auto !important;
+        padding: 4px !important;
+        border-radius: 10px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 最上段の2列枠構造（レイアウト保持） */
+    #tab-battle > div.grid-cols-1 > div:last-child > div.bg-slate-950\/90 > div.grid-cols-2:first-child,
+    #tab-battle > div.grid-cols-1 > div:last-child div.bg-slate-950\/80 > div.grid-cols-2:first-child {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 4px !important;
+        width: 100% !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* ★ 左側：じゃんけん枠のボックス自体を完全非表示 */
+    #tab-battle > div.grid-cols-1 > div:last-child > div.bg-slate-950\/90 > div.grid-cols-2:first-child > div:first-child,
+    #tab-battle > div.grid-cols-1 > div:last-child div.bg-slate-950\/80 > div.grid-cols-2:first-child > div:first-child {
+        display: none !important;
+    }
+
+    /* ★ じゃんけん結果の要素IDそのものをピンポイントで強制非表示 */
+    #calc-janken-result {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* ★ 右側：ポーカー役枠（100%化せずに2列の右側に配置し文字サイズ調整） */
+    #tab-battle > div.grid-cols-1 > div:last-child > div.bg-slate-950\/90 > div.grid-cols-2:first-child > div:last-child,
+    #tab-battle > div.grid-cols-1 > div:last-child div.bg-slate-950\/80 > div.grid-cols-2:first-child > div:last-child {
+        grid-column: 2 / 3 !important;
+        height: 26px !important;
+        padding: 0 4px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        font-size: 10px !important;
+        letter-spacing: -0.02em !important;
+        box-sizing: border-box !important;
+    }
+
+    #tab-battle > div.grid-cols-1 > div:last-child div.grid-cols-2:first-child > div:last-child * {
+        font-size: inherit !important;
+        white-space: nowrap !important;
+        line-height: 1 !important;
+    }
+
+    /* ★ 特性タグ 2列×3行 固定グリッド（完璧な状態を100%維持） */
+    #calc-active-tags {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        grid-template-rows: repeat(3, 22px) !important;
+        gap: 3px 4px !important;
+        height: auto !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 各特性タグ（完璧な状態を100%維持） */
+    #calc-active-tags > span,
+    #calc-active-tags .badge,
+    #calc-active-tags > div {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        height: 22px !important;
+        padding: 0 4px !important;
+        font-size: 9.5px !important;
+        line-height: 1 !important;
+        letter-spacing: -0.02em !important;
+        white-space: nowrap !important;
+        border-radius: 5px !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+    }
+
+    /* 7個目以降の空枠排除 */
+    #calc-active-tags > *:nth-child(n+7) {
+        display: none !important;
+    }
+
+    /* 予測ATK / DEF表示枠（完璧な状態を100%維持） */
+    #tab-battle > div.grid-cols-1 > div:last-child > div.grid-cols-2 {
+        margin-top: 4px !important;
+    }
+
+    #calc-total-atk,
+    #calc-total-def {
+        font-size: 1.35rem !important;
+        line-height: 1 !important;
+    }
+
+/* --- 6. 下段：手札エリア（カード枠・選択枠の見切れ完全防止版） --- */
+    #tab-battle > div.bg-slate-900\/90 {
+        padding: 6px 4px !important;            /* 上下に少しゆとりを持たせて青枠の見切れを防止 */
+        border-radius: 12px !important;
+        flex: 1 1 0% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        align-items: center !important;
+        overflow: hidden !important;
+    }
+
+    /* 手札コンテナ：上下のパディングを確保して選択枠（リング）が途切れないようにする */
+    #player-hand-container {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        width: 100% !important;
+        height: 100% !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scroll-snap-type: x mandatory !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding: 4px 6px !important;           /* ★ 内側余白を広げて発光枠や太線の見切れをガード */
+        box-sizing: border-box !important;
+    }
+
+    /* スクロールバーの隠蔽 */
+    #player-hand-container::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* 各カード枠：上下余白の中でぴったり 3/4 アスペクト比を維持 */
+    #player-hand-container .card-container {
+        flex: 0 0 auto !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        width: auto !important;
+        aspect-ratio: 3 / 4 !important;
+        padding: 0 !important;
+        border-radius: 8px !important;
+        scroll-snap-align: start !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    /* 不要なテキスト・バッジ非表示 */
+    #player-hand-container .card-container > div:first-child,
+    #player-hand-container .card-container > div:last-child,
+    #player-hand-container .card-container > div.relative > div {
+        display: none !important;
+    }
+
+    /* カード画像ラッパーおよび画像本体 */
+    #player-hand-container .card-container > div.relative,
+    #player-hand-container .card-container img {
+        width: 100% !important;
+        height: 100% !important;
+        aspect-ratio: 3 / 4 !important;
+        object-fit: cover !important;
+        object-position: top center !important;
+        display: block !important;
+        margin: 0 !important;
+    }
+}
+
+/* --- 手札エリアの左右スクロール誘導ネオン矢印 --- */
+    #tab-battle > div.bg-slate-900\/90 {
+        position: relative !important; /* 矢印の位置基準 */
+    }
+
+    /* 左矢印 << */
+    #tab-battle > div.bg-slate-900\/90::before {
+        content: "<<" !important;
+        position: absolute !important;
+        left: 4px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        z-index: 10 !important;
+        font-family: monospace !important;
+        font-weight: 900 !important;
+        font-size: 14px !important;
+        color: #00ffcc !important; /* 蛍光シアン（エメラルド） */
+        text-shadow: 0 0 6px #00ffcc, 0 0 12px #00ffcc !important; /* ネオン発光エフェクト */
+        pointer-events: none !important; /* カードのタップ・フリック操作を邪魔しない */
+        opacity: 0.8 !important;
+        animation: pulseNeon 1.5s infinite alternate !important; /* ふわふわ点滅 */
+    }
+
+    /* 右矢印 >> */
+    #tab-battle > div.bg-slate-900\/90::after {
+        content: ">>" !important;
+        position: absolute !important;
+        right: 4px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        z-index: 10 !important;
+        font-family: monospace !important;
+        font-weight: 900 !important;
+        font-size: 14px !important;
+        color: #00ffcc !important; /* 蛍光シアン（エメラルド） */
+        text-shadow: 0 0 6px #00ffcc, 0 0 12px #00ffcc !important; /* ネオン発光エフェクト */
+        pointer-events: none !important; /* カードのタップ・フリック操作を邪魔しない */
+        opacity: 0.8 !important;
+        animation: pulseNeon 1.5s infinite alternate !important; /* ふわふわ点滅 */
+    }
+
+    /* ネオンの点滅アニメーション定義 */
+    @keyframes pulseNeon {
+        0% { opacity: 0.3; transform: translateY(-50%) scale(0.9); }
+        100% { opacity: 1; transform: translateY(-50%) scale(1.1); }
+    }
