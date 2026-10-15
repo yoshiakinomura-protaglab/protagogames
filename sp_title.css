@@ -1,0 +1,128 @@
+/**
+ * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
+ * 画面幅 767px 以下（スマホ縦持ち）の時だけ発動。
+ * PC表示（768px以上）および他画面には一切影響を与えません。
+ */
+
+@media (max-width: 767px) {
+
+    /* --- 1. 全体コンテナ：100dvhで画面いっぱいに無理なく配置 --- */
+    #title-screen-component {
+        padding: 10px 14px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        height: 100dvh !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    /* --- 2. 最上段ヘッダー：時代・表示切り替えボタン（右揃え・コンパクト化） --- */
+    #title-screen-component > div.absolute.top-6.right-6 {
+        position: relative !important;
+        top: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        gap: 6px !important;
+        z-index: 30 !important;
+        margin-bottom: 2px !important;
+    }
+
+    #select-title-gen,
+    #btn-toggle-title-mode {
+        padding: 4px 8px !important;
+        font-size: 11px !important;
+        border-radius: 8px !important;
+    }
+
+    /* --- 3. 画面中央：1:1 円形ロゴ (主役) --- */
+    #title-screen-component > div.relative.z-10.flex.flex-col {
+        position: relative !important;
+        margin-left: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        flex: 1 !important;
+    }
+
+    #title-logo-img {
+        max-width: 200px !important; /* 画面サイズに収まる1:1円形サイズ */
+        height: auto !important;
+        margin: 4px auto 0 auto !important;
+    }
+
+    /* --- 4. 下段エリア：左右分割レイアウト（左: メニュー / 右: 3Dカード） --- */
+    #title-screen-component .w-\[380px\] {
+        width: 100% !important;
+        margin-bottom: 8px !important;
+    }
+
+    /* メニューを保持する親枠 */
+    #title-screen-component > div.relative.z-10.flex.flex-col > div.w-\[380px\] {
+        display: flex !important;
+        width: 100% !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+
+    /* 左側 58%：メニュー3ボタン（縦並び） */
+    #title-menu-container {
+        width: 58% !important;
+        max-width: 58% !important;
+        gap: 8px !important;
+    }
+
+    #title-menu-container button {
+        padding: 10px 12px !important;
+        border-radius: 12px !important;
+        font-size: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+
+    /* ボタン内のバッジ・文字サイズ調整 */
+    #title-menu-container button span {
+        font-size: 11px !important;
+    }
+
+    /* 右側 40%：3D自転カード */
+    #title-screen-component > div.absolute.right-8.bottom-12 {
+        position: relative !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 40% !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        margin: 0 !important;
+        z-index: 20 !important;
+    }
+
+    #title-screen-component .perspective-1000 {
+        width: 105px !important; /* 左右分割の右枠にピッタリ収まるカード幅 */
+    }
+
+    /* --- 5. モーダル群：スマホ画面にフィットする高さ・スクロール調整 --- */
+    #opponent-select-modal > div,
+    #modal-select-deck > div,
+    #modal-vs-confirm > div,
+    #p2p-match-modal > div {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        max-height: 88dvh !important;
+        padding: 14px !important;
+        overflow-y: auto !important;
+    }
+
+    /* 対戦相手選択モーダル内のグリッド余白調整 */
+    #opponent-list-container {
+        gap: 6px !important;
+    }
+}
