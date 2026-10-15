@@ -112,6 +112,10 @@ export class P2PManager {
                 if (this.gameHooks.onOpponentTurnChoice) this.gameHooks.onOpponentTurnChoice(packet.payload);
                 break;
 
+            case 'NEXT_TURN_READY': // ★追加: 相手が「次へ進む」を押して準備完了
+                if (this.gameHooks.onOpponentNextTurnReady) this.gameHooks.onOpponentNextTurnReady();
+                break;
+
             case 'REMATCH_SAME': // 相手が「同じデッキで再戦」を希望
                 if (this.gameHooks.onOpponentRematchSame) this.gameHooks.onOpponentRematchSame();
                 break;
@@ -135,6 +139,12 @@ export class P2PManager {
         return this.network.send('HAND_STAT_UPDATE', statData);
     }
 
+    sendNextTurnReady() {
+        this.network.send({
+            type: 'NEXT_TURN_READY'
+        });
+    }
+
     sendTurnChoice(selectedCardsData) {
         this.stopTurnTimer();
         return this.network.send('TURN_CHOICE', selectedCardsData);
@@ -146,5 +156,10 @@ export class P2PManager {
 
     sendChangeDeck() {
         return this.network.send('CHANGE_DECK', {});
+    }
+
+    // ★追加: 自分の「次へ進む」準備完了通知を相手に送信
+    sendNextTurnReady() {
+        return this.network.send('NEXT_TURN_READY', {});
     }
 }
