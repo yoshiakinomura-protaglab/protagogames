@@ -1,6 +1,6 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （中央巨大ロゴ ＆ 左ボタン・右3Dカード下端揃え 確定版）
+ * （Tailwind CDN用 セレクタ完全修正版）
  */
 
 @media (max-width: 767px) {
@@ -18,8 +18,9 @@
         box-sizing: border-box !important;
     }
 
-    /* --- 2. 最上段ヘッダー（時代・表示切替：右上維持・スリム化） --- */
-    #title-screen-component > div.absolute.top-6.right-6 {
+    /* --- 2. 最上段ヘッダー（時代・表示切替：右上維持） --- */
+    #title-screen-component > div.absolute.top-6.right-6,
+    #title-screen-component > div[class*="top-6"][class*="right-6"] {
         position: absolute !important;
         top: 10px !important;
         right: 10px !important;
@@ -35,50 +36,56 @@
         border-radius: 8px !important;
     }
 
-    /* --- 3. 画面中央：1:1 円形ロゴ（中央にドカンと大きく表示） --- */
+    /* --- 3. 画面中央：1:1 円形ロゴ（ドカンと大きく表示） --- */
     #title-screen-component > div.relative.z-10.flex.flex-col {
         position: relative !important;
         margin-left: 0 !important;
-        margin-top: 35px !important;       /* ヘッダーとの間に適度な余白 */
+        margin-top: 35px !important;
         width: 100% !important;
         align-items: center !important;
         justify-content: flex-start !important;
     }
 
     #title-logo-img {
-        max-width: 285px !important;       /* ★ ロゴを中央でドカンと拡大 */
-        width: 80vw !important;            /* 画面幅の80%を使用 */
+        max-width: 285px !important;       /* ロゴを中央で大きく表示 */
+        width: 80vw !important;
         height: auto !important;
         margin: 0 auto !important;
         display: block !important;
     }
 
-    /* --- 4. 下段左側：メニューボタン群（下端基準 bottom: 20px） --- */
-    #title-screen-component .w-\[380px\] {
+    /* --- 4. 下段左側：メニューボタン群（確実な属性セレクタで左下固定） --- */
+    #title-screen-component div[class*="w-[380px]"],
+    #title-screen-component div[class*="w-"],
+    #title-menu-container {
+        max-width: 54% !important;
+    }
+
+    /* ボタン群ラッパーの配置強制指定 */
+    #title-screen-component > div.relative.z-10.flex.flex-col > div[class*="w-"] {
         position: absolute !important;
         left: 12px !important;
-        bottom: 20px !important;          /* ★ 下端を20pxに固定 */
+        bottom: 20px !important;          /* 下端20px */
         width: 54% !important;
-        max-width: 54% !important;
         margin: 0 !important;
         z-index: 30 !important;
     }
 
     #title-menu-container {
         width: 100% !important;
-        max-width: 100% !important;
         display: flex !important;
         flex-direction: column !important;
         gap: 6px !important;
     }
 
-    /* ボタン内のバッジ（コインGET等）を完全非表示 */
+    /* バッジ非表示 */
     #title-menu-container button > span.text-\[10px\],
-    #title-menu-container button span.text-\[10px\] {
+    #title-menu-container button span.text-\[10px\],
+    #title-menu-container button span[class*="text-[10px]"] {
         display: none !important;
     }
 
-    /* ボタン本体の小型・スリム化 */
+    /* ボタン本体 */
     #title-menu-container button {
         padding: 8px 10px !important;
         border-radius: 10px !important;
@@ -95,27 +102,29 @@
         font-size: 13px !important;
     }
 
-    /* --- 5. 下段右側：3Dカード（下端を左ボタン群と下揃え） --- */
-    #title-screen-component > div.absolute.right-8.bottom-12 {
+    /* --- 5. 下段右側：3Dカード（確実な属性セレクタで右下固定） --- */
+    #title-screen-component > div[class*="bottom-12"],
+    #title-screen-component > div[class*="right-8"] {
         position: absolute !important;
         right: 12px !important;
-        bottom: 20px !important;          /* ★ ボタン群と同じ下端20pxにピッタリ同期 */
+        bottom: 20px !important;          /* ボタン群と同じ下端20pxに同期 */
         left: auto !important;
         top: auto !important;
         width: 40% !important;
         display: flex !important;
         justify-content: center !important;
-        align-items: flex-end !important; /* 下揃え */
+        align-items: flex-end !important;
         margin: 0 !important;
         z-index: 30 !important;
     }
 
-    #title-screen-component .perspective-1000 {
-        width: 95px !important;           /* 存在感のあるカードサイズ */
+    #title-screen-component .perspective-1000,
+    #title-screen-component div[class*="perspective"] {
+        width: 95px !important;
         height: 126px !important;
     }
 
-    /* --- 6. モーダル群のスマホ幅調整 --- */
+    /* --- 6. モーダル群 --- */
     #opponent-select-modal > div,
     #modal-select-deck > div,
     #modal-vs-confirm > div,
