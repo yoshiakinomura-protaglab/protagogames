@@ -1336,20 +1336,59 @@ window.openCardDetail = function(cardId, event) {
         retsudenEl.innerText = retsudenMap[card.id] || "（列伝テキスト準備中）";
     }
 
-    modal?.classList.remove('hidden');
+    if (modal) {
+        modal.style.display = 'flex';           /* ★ インラインの display: none を上書き解除 */
+        modal.classList.remove('hidden');
+    }
 };
 
-// モーダルイベント初期化
-document.addEventListener('DOMContentLoaded', () => {
+// 詳細モーダルを確実に閉じるグローバル関数
+window.closeCardDetailModal = function() {
+    const modal = document.getElementById('modal-card-detail');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+};
+
+// モーダルイベント初期化＆直接イベント登録
+function initCardDetailModalEvents() {
     loadTagsCSV();
     loadRetsudenCSV();
 
-    document.getElementById('btn-close-detail-modal')?.addEventListener('click', () => {
-        document.getElementById('modal-card-detail')?.classList.add('hidden');
-    });
+    // ✕ ボタンで閉じる
+    const closeBtn = document.getElementById('btn-close-detail-modal');
+    if (closeBtn) {
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            window.closeCardDetailModal();
+        };
+    }
 
-    document.getElementById('btn-detail-toggle-img')?.addEventListener('click', () => {
-        gameState.displayMode = gameState.displayMode === 'illust' ? 'real' : 'illust';
-        if (activeCardDetail) window.openCardDetail(activeCardDetail.id);
-    });
-});
+    // モーダルの背景（黒い暗転部分）タップで閉じる
+    const modal = document.getElementById('modal-card-detail');
+    if (modal) {
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                window.closeCardDetailModal();
+            }
+        };
+    }
+
+    // 画像切替ボタン
+    const toggleImgBtn = document.getElementById('btn-detail-toggle-img');
+    if (toggleImgBtn) {
+        toggleImgBtn.onclick = (e) => {
+            e.stopPropagation();
+            gameState.displayMode = gameState.displayMode === 'illust' ? 'real' : 'illust';
+            if (activeCardDetail) window.openCardDetail(activeCardDetail.id);
+        };
+    }
+}
+
+// 読み込みタイミングに関わらず確実に実行
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCardDetailModalEvents);
+} else {
+    initCardDetailModalEvents();
+}

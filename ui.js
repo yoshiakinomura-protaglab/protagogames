@@ -94,7 +94,6 @@ export function createCardHTML(card, options = {}) {
     const fileName = (displayMode === 'real' ? card.imageReal : card.imageIllust) || `${card.id}_${displayMode}.jpg`;
     const imgSrc = `images/${fileName}`;
 
-    // ★ 特性タグ：文字サイズ（text-[11px] sm:text-xs）と高さ・ゆとりの最適化
     let tagsHTML = '<span class="text-[11px] text-slate-500 italic col-span-2 text-center">タグなし</span>';
     if (Array.isArray(card.tags) && card.tags.length > 0) {
         tagsHTML = card.tags.map(tagData => {
@@ -108,7 +107,28 @@ export function createCardHTML(card, options = {}) {
         }).join('');
     }
 
-        const selectedClasses = isSelected
+    // ★ スマホ用：カード左上縦一列アイコン（最大8個：①じゃんけん ②ポーカー手 ③〜⑧特性）
+    let statusIconsHTML = `
+        <div class="w-4 h-4 rounded flex items-center justify-center text-[9px] font-black border ${jInfo.color} shadow-md flex-shrink-0">
+            ${jInfo.label}
+        </div>
+        <div class="w-4 h-4 rounded flex items-center justify-center text-[8px] font-mono font-black border bg-amber-950/90 text-amber-300 border-amber-500/80 shadow-md flex-shrink-0">
+            ${rankDisplay}
+        </div>
+    `;
+
+    if (Array.isArray(card.tags) && card.tags.length > 0) {
+        card.tags.slice(0, 6).forEach(tagData => {
+            const parsed = parseTagInfo(tagData);
+            statusIconsHTML += `
+                <div class="w-4 h-4 rounded flex items-center justify-center text-[8px] border ${parsed.color} shadow-md flex-shrink-0">
+                    <i class="fa-solid ${parsed.icon}"></i>
+                </div>
+            `;
+        });
+    }
+
+    const selectedClasses = isSelected
         ? 'border-cyan-300 ring-4 ring-cyan-400/80 card-selected-style brightness-100 opacity-100'
         : 'border-slate-800/80 brightness-50 opacity-60 grayscale-[30%] hover:brightness-90 hover:opacity-90';
 
@@ -116,33 +136,37 @@ export function createCardHTML(card, options = {}) {
     <div class="card-container relative w-full bg-slate-900 border-2 ${selectedClasses} rounded-xl p-1.5 flex flex-col justify-between shadow-xl cursor-pointer overflow-hidden select-none" 
          data-action="${dataAction}" 
          data-id="${card.id}">
-
-        <!-- 虫眼鏡（詳細表示）ボタン -->
-        <button onclick="window.openCardDetail('${card.id}', event)" class="absolute top-1 right-1 bg-slate-950/90 border border-amber-400 text-amber-300 w-5 h-5 rounded-full flex items-center justify-center text-[10px] hover:scale-110 z-30 cursor-pointer shadow-md">
-            <i class="fa-solid fa-magnifying-glass"></i>
-        </button>
         
-        <!-- ★ カード名... -->
+        <!-- ★ カード名ヘッダー -->
         <div class="flex items-center justify-between gap-1 bg-slate-950/90 border border-slate-800 p-1 rounded-lg mb-1 pointer-events-none flex-shrink-0">
             <h4 class="font-normal text-sm sm:text-base text-slate-100 font-yuji truncate flex-1 leading-tight tracking-wide">${card.name || '英傑'}</h4>
             <span class="text-xs px-1.5 py-0.5 rounded border ${jInfo.color} font-black shadow-inner flex-shrink-0">${jInfo.label}</span>
             <span class="font-bold text-xs bg-amber-950 border border-amber-500/70 px-1.5 py-0.5 rounded text-amber-300 font-mono shadow-md flex-shrink-0">${rankDisplay}</span>
         </div>
 
+        <!-- ★ 武将画像コンテナ（この内部の右上に虫眼鏡ボタンを配置） -->
         <div class="relative w-full flex-1 aspect-[3/4] min-h-0 rounded-lg overflow-hidden border border-slate-700/80 bg-slate-950 shadow-inner pointer-events-none my-0.5">
             <img src="${imgSrc}" alt="${card.name || 'カード'}" class="w-full h-full object-cover object-top" onerror="this.onerror=null; this.src='images/default.jpg';">
             
-            <div class="absolute bottom-1 right-2 inline-block select-none pointer-events-none">
-            <span class="relative inline-block font-black text-3xl sm:text-4xl font-sans tracking-wider block drop-shadow-[0_4px_4px_rgba(0,0,0,0.9)]"
-      style="-webkit-text-stroke: 2.5px #ffffff; -webkit-text-fill-color: #ffffff;">
-    ${famousVal}
-    <span class="absolute inset-0 gold-text" 
-          style="-webkit-text-stroke: 1px #ca8a04; pointer-events: none;">
-        ${famousVal}
-    </span>
-</span>
+            <!-- ★ スマホ用 左上縦一列アイコン列（PCでは初期非表示） -->
+            <div class="card-status-icon-column absolute top-1 left-1 hidden flex-col gap-0.5 z-20 pointer-events-none">
+                ${statusIconsHTML}
+            </div>
 
-</span>
+            <!-- 虫眼鏡（詳細表示）ボタン：画像の右上 ＆ クリック可能にセット -->
+            <button onclick="window.openCardDetail('${card.id}', event)" class="absolute top-1 right-1 bg-slate-950/90 border border-amber-400 text-amber-300 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs hover:scale-110 z-30 cursor-pointer shadow-md pointer-events-auto">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+
+            <!-- 有名度数値表示 -->
+            <div class="absolute bottom-1 right-2 inline-block select-none pointer-events-none">
+                <span class="relative inline-block font-black text-3xl sm:text-4xl font-sans tracking-wider block drop-shadow-[0_4px_4px_rgba(0,0,0,0.9)]"
+                      style="-webkit-text-stroke: 2.5px #ffffff; -webkit-text-fill-color: #ffffff;">
+                    ${famousVal}
+                    <span class="absolute inset-0 gold-text" style="-webkit-text-stroke: 1px #ca8a04; pointer-events: none;">
+                        ${famousVal}
+                    </span>
+                </span>
                 ${particlesHTML}
             </div>
         </div>
