@@ -94,7 +94,7 @@
                 </div>
             </div>
 
-            <button onclick="window.location.href='title.html'" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-2">
+            <button onclick="if(window.pvpPrepAudio){window.pvpPrepAudio.pause();} window.location.href='title.html'" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-2">
                 <i class="fa-solid fa-house"></i> タイトルに戻る
             </button>
         </div>
@@ -558,5 +558,19 @@
             </div>
         </div>
     </div>
+
+<!-- 対戦部屋での準備BGM（beforepvp）再生処理 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                window.pvpPrepAudio = new Audio('audio/beforepvp.mp3');
+                window.pvpPrepAudio.loop = true;
+                window.pvpPrepAudio.volume = 0.4;
+                window.pvpPrepAudio.play().catch(err => {
+                    console.log("p2p_room BGM再生制限:", err);
+                });
+            } catch(e) {}
+        });
+    </script>
 </body>
 </html>

@@ -14,3 +14,9 @@ win_normal,result,win_normal_bgm.mp3
 lose_perfect,result,lose_perfect_bgm.mp3
 lose_normal,result,lose_normal_bgm.mp3
 deckbuild,deckbuild,deckbuild_bgm.mp3
+pvpbattle1,pvpbattle,pvp_battle1.mp3
+pvpbattle2,pvpbattle,pvp_battle2.mp3
+pvpbattle3,pvpbattle,pvp_battle3.mp3
+pvpbattle4,pvpbattle,pvp_battle4.mp3
+pvpbattle5,pvpbattle,pvp_battle5.mp3
+beforepvp,beforepvp,beforepvp.mp3

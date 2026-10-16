@@ -388,18 +388,22 @@
     <script>
         (async () => {
             try {
-                // P2P対戦モードか判定
                 const isP2P = sessionStorage.getItem('isP2PMatch') === 'true';
                 const targetScript = isP2P ? './p2p_main.js' : './main.js';
-                console.log(`[Game Loader] モード: ${isP2P ? 'P2P対戦' : 'ソロプレイ'} (${targetScript})`);
+                console.log(`[Game Loader] モード判定: ${isP2P ? 'P2P対戦' : 'ソロプレイ'} -> ロード先: ${targetScript}`);
 
                 const res = await fetch(targetScript);
+                if (!res.ok) {
+                    console.error(`[Game Loader] ${targetScript} の取得に失敗 (HTTP ${res.status})`);
+                    return;
+                }
                 const jsText = await res.text();
                 const blob = new Blob([jsText], { type: 'application/javascript' });
                 const blobUrl = URL.createObjectURL(blob);
                 await import(blobUrl);
+                console.log(`[Game Loader] ${targetScript} のインポート完了！`);
             } catch (e) {
-                console.error("メインJSモジュールのロードに失敗:", e);
+                console.error("メインJSモジュールのロードに例外発生:", e);
             }
         })();
     </script>

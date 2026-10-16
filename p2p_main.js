@@ -3,6 +3,8 @@
  * 役割: P2P通信同期、20枚デッキハンドシェイク、毎ターンの同時カード選択、30秒タイマー、本格計算エンジン＆演出完全連動
  */
 
+console.log("[P2P MAIN] p2p_main.js ファイルが正常に読み込まれました！");
+
 // ポータブル環境用：MIMEタイプ制限を回避して依存関係付きモジュールを安全に動的ロードする関数
 async function loadGameModules() {
     try {
@@ -296,6 +298,20 @@ async function handleConfirmDeckSelection() {
     };
 
     gameState.p2pNetwork.onDisconnectedCallback = () => {
+        // ★ HPが0以下（KO勝敗判定）または 最終ターン（全5陣）終了時のいずれかに該当するかチェック
+        const isBattleFinished = (
+            gameState.playerHp <= 0 || 
+            gameState.cpuHp <= 0 || 
+            gameState.turn >= gameState.maxTurn
+        );
+
+        if (isBattleFinished) {
+            // 戦闘決着後の退室であれば、残ったプレイヤーの画面をストップ（モーダル表示）させずに鑑賞を継続
+            console.log("[P2P] 戦闘決着後の相手退室を検知しました。画面操作を妨げず継続します。");
+            return;
+        }
+
+        // ★ 戦闘途中（決着前）の不慮の切断/離脱のみ、従来の離脱警告を表示
         if (!gameState.p2pNetwork.isHost) {
             alert("対戦相手（ホスト）が離脱したため、部屋作成画面に戻ります。");
             cancelWaitingAndReset();
@@ -407,6 +423,18 @@ function checkStartBattleSequence() {
         console.log("[P2P] ⚔️ 双方のデッキが揃いました！ 対戦を開始します。");
         document.getElementById('p2p-waiting-opponent-modal')?.classList.add('hidden');
 
+        // ★ ① 前画面・待機モーダルで鳴っていた beforepvp を確実に停止する！
+        if (window.pvpPrepAudio) {
+            try {
+                window.pvpPrepAudio.pause();
+                window.pvpPrepAudio.currentTime = 0;
+            } catch(e) {}
+            window.pvpPrepAudio = null;
+        }
+
+        // ★ ② 対戦用BGM（pvpbattle1〜5）をランダム再生する！
+        playRandomPVPBattleBGM();
+
         gameState.cpuJoker = gameState.allCards.find(c => String(c.id) === String(gameState.opponentDeckData.jokerId)) || gameState.allCards[0];
         
         const fullCards = [];
@@ -480,21 +508,72 @@ async function checkExecuteTurn() {
     }
 }
 
-function playSceneBGM(bgmId, isLoop = true) {
+// ★ PVP対戦用：bgm.csv 連動ランダム再生関数
+function playRandomPVPBattleBGM() {
     if (bgmAudio) {
-        bgmAudio.pause();
+        try { bgmAudio.pause(); } catch(e) {}
         bgmAudio = null;
     }
 
-    const bgmItem = gameState.bgmMaster.find(b => (b.bgm_id || b.bgmId) === String(bgmId));
-    const fileName = bgmItem ? (bgmItem.bgm_file || bgmItem.bgmFile) : '';
-    const bgmPath = fileName ? `audio/${fileName}` : 'audio/yayoi_bgm.mp3';
+    // 1. bgm.csv のデータ (gameState.bgmMaster) から scene が 'pvpbattle' の曲を抽出
+    let pvpBgmItems = gameState.bgmMaster.filter(b => (b.scene || b.category) === 'pvpbattle');
 
-    bgmAudio = new Audio(bgmPath);
-    bgmAudio.loop = isLoop;
-    bgmAudio.volume = 0.3;
+    // CSV未読み込み時の予備検索 (bgm_id: pvpbattle1〜5)
+    if (!pvpBgmItems || pvpBgmItems.length === 0) {
+        const targetIds = ['pvpbattle1', 'pvpbattle2', 'pvpbattle3', 'pvpbattle4', 'pvpbattle5'];
+        pvpBgmItems = gameState.bgmMaster.filter(b => targetIds.includes(String(b.bgm_id || b.bgmId)));
+    }
 
-    bgmAudio.play().catch(() => {});
+    let fileName = '';
+    let selectedId = '';
+
+    if (pvpBgmItems && pvpBgmItems.length > 0) {
+        // ランダムで1曲選出
+        const selected = pvpBgmItems[Math.floor(Math.random() * pvpBgmItems.length)];
+        selectedId = selected.bgm_id || selected.bgmId;
+        fileName = selected.bgm_file || selected.bgmFile;
+    }
+
+    // フォールバック（CSVデータが取れなかった場合の bgm.csv 記載の正式ファイル名）
+    if (!fileName) {
+        const fallbackFiles = ['pvp_battle1.mp3', 'pvp_battle2.mp3', 'pvp_battle3.mp3', 'pvp_battle4.mp3', 'pvp_battle5.mp3'];
+        fileName = fallbackFiles[Math.floor(Math.random() * fallbackFiles.length)];
+    }
+
+    const bgmPath = `audio/${fileName}`;
+    console.log(`[PVP BGM] bgm.csvより再生: ID[${selectedId}] -> ${fileName}`);
+
+    try {
+        bgmAudio = new Audio(bgmPath);
+        bgmAudio.loop = true;
+        bgmAudio.volume = 0.35;
+
+        bgmAudio.play().catch(err => {
+            console.log("BGM自動再生待ち:", err);
+        });
+    } catch(e) {
+        console.error("[PVP BGM] Audio生成エラー:", e);
+    }
+}
+
+function playSceneBGM(bgmId, isLoop = true) {
+    // 勝敗カットインテーマ等の指定がある場合のみ通常再生、それ以外はランダムPVPBGMを再生
+    if (bgmId && (bgmId.startsWith('win_') || bgmId.startsWith('lose_'))) {
+        if (bgmAudio) {
+            bgmAudio.pause();
+            bgmAudio = null;
+        }
+        const bgmItem = gameState.bgmMaster.find(b => (b.bgm_id || b.bgmId) === String(bgmId));
+        const fileName = bgmItem ? (bgmItem.bgm_file || bgmItem.bgmFile) : '';
+        if (fileName) {
+            bgmAudio = new Audio(`audio/${fileName}`);
+            bgmAudio.loop = isLoop;
+            bgmAudio.volume = 0.4;
+            bgmAudio.play().catch(() => {});
+        }
+    } else {
+        playRandomPVPBattleBGM();
+    }
 }
 
 function stopEraBGM() {
@@ -517,8 +596,30 @@ function setupEventListeners() {
     const btnDeckCancel = document.getElementById('btn-p2p-deck-cancel');
     if (btnDeckCancel) btnDeckCancel.onclick = cancelWaitingAndReset;
 
+    // ★ 待機キャンセルの処理を状況に応じて分岐
     const btnCancelWait = document.getElementById('btn-cancel-waiting');
-    if (btnCancelWait) btnCancelWait.onclick = cancelWaitingAndReset;
+    if (btnCancelWait) {
+        btnCancelWait.onclick = () => {
+            // バトル中（対戦進行中）に「カード選択待機」をキャンセルした場合
+            if (gameState.turn >= 1 && gameState.p2pNetwork && gameState.p2pNetwork.isConnected) {
+                console.log("[P2P] バトル中の選択待機をキャンセルし、手札選択画面へ戻ります。");
+                
+                // 1. 待機モーダルを閉じる
+                const waitModal = document.getElementById('p2p-waiting-opponent-modal');
+                if (waitModal) {
+                    waitModal.style.display = '';
+                    waitModal.classList.add('hidden');
+                }
+                
+                // 2. 送信済みの自分の選択状態をリセットして手札選択をやり直せるようにする
+                gameState.myTurnChoice = null;
+                refreshAllUI();
+            } else {
+                // 部屋作成時・マッチング前のキャンセルは通常通り部屋選択へリセット
+                cancelWaitingAndReset();
+            }
+        };
+    }
 
     const toggleImgBtn = document.getElementById('btn-toggle-img-mode') || document.getElementById('img-mode-toggle');
     if (toggleImgBtn) {
@@ -607,18 +708,37 @@ function setupEventListeners() {
         };
     }
 
-    const audioOverlay = document.getElementById('battle-start-audio-overlay');
-    if (audioOverlay) {
-        audioOverlay.onclick = () => {
-            audioOverlay.classList.add('opacity-0', 'pointer-events-none');
-            setTimeout(() => { try { audioOverlay.remove(); } catch(e) {} }, 500);
-            playSceneBGM('d01', true);
+    // ★ 画面上のオーバーレイタップ（または開戦タップ）を動的に検知するイベントリスナー
+    const handleAudioOverlayClick = (e) => {
+        const overlay = e.target.closest('#battle-start-audio-overlay');
+        if (overlay) {
+            console.log("[PVP BGM] 開戦オーバーレイのタップを検知しました！");
+
+            // 1. 前画面の準備曲（beforepvp）を停止
+            if (window.pvpPrepAudio) {
+                try {
+                    window.pvpPrepAudio.pause();
+                    window.pvpPrepAudio.currentTime = 0;
+                } catch(err) {}
+                window.pvpPrepAudio = null;
+            }
+
+            // 2. PVPランダム曲（pvpbattle1〜5）を再生！
+            playRandomPVPBattleBGM();
+
+            // 3. オーバーレイの消去演出 ＆ 第1陣カットイン
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => { try { overlay.remove(); } catch(err) {} }, 500);
+
             setTimeout(() => {
                 const cutinFn = window.triggerTurnCutin || (typeof triggerTurnCutin !== 'undefined' ? triggerTurnCutin : null);
                 if (cutinFn) cutinFn(1);
             }, 200);
-        };
-    }
+        }
+    };
+
+    document.removeEventListener('click', handleAudioOverlayClick);
+    document.addEventListener('click', handleAudioOverlayClick);
 
     document.removeEventListener('click', handleCardClick);
     document.addEventListener('click', handleCardClick);
@@ -925,6 +1045,9 @@ function startRematchSequence() {
     gameState.opponentRematchRequest = false;
 
     resetP2PGameVariables();
+
+    // ★ 再戦開始：新しいランダム曲へ切り替え！
+    playRandomPVPBattleBGM();
 
     if (gameState.myDeckReadyData) {
         gameState.p2pManager.sendDeckReady(gameState.myDeckReadyData);

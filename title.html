@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Yuji+Boku&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="sp_title.css">
-    
+
     <style>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -84,14 +84,26 @@
             // スタート画面タップ時の処理
             if (startOverlay) {
                 startOverlay.addEventListener('click', () => {
-                    // 1. BGM再生開始
+                    // 1. タイトルBGM再生開始
                     if (bgm) {
                         bgm.play().catch(err => {
                             console.log("BGM再生ブロックエラー:", err);
                         });
                     }
 
-                    // 2. 黒背景をフェードアウト
+                    // ★ 2. 戦闘準備BGMの音声再生権限（ブラウザロック）をタップ時に一括解除しておく！
+                    try {
+                        window.pvpPrepAudio = new Audio('audio/beforepvp.mp3');
+                        window.pvpPrepAudio.loop = true;
+                        window.pvpPrepAudio.volume = 0.4;
+                        // 一瞬再生して即時ポーズ（再生権限を獲得）
+                        window.pvpPrepAudio.play().then(() => {
+                            window.pvpPrepAudio.pause();
+                            window.pvpPrepAudio.currentTime = 0;
+                        }).catch(() => {});
+                    } catch(e) {}
+
+                    // 3. 黒背景をフェードアウト
                     startOverlay.classList.add('opacity-0', 'pointer-events-none');
                     
                     setTimeout(() => {
@@ -100,6 +112,7 @@
                 });
             }
         });
+
     </script>
 
 
@@ -239,6 +252,42 @@
         // アニメーション開始
         requestAnimationFrame(animateCard);
 
+        // ★ 戦闘準備曲（beforepvp）強制再生関数
+        function playBeforePvPBGM() {
+            console.log("[BGM] playBeforePvPBGM 呼び出し");
+
+            // 1. タイトルBGMを停止
+            const titleBgm = document.getElementById('bgm-title');
+            if (titleBgm) {
+                titleBgm.pause();
+                console.log("[BGM] タイトルBGM停止");
+            }
+
+            // 2. 既存の準備BGMがあれば一度停止
+            if (window.pvpPrepAudio) {
+                window.pvpPrepAudio.pause();
+                window.pvpPrepAudio = null;
+            }
+
+            // 3. ボタンタップのイベント直下で直接生成＆再生
+            try {
+                window.pvpPrepAudio = new Audio('audio/beforepvp.mp3');
+                window.pvpPrepAudio.loop = true;
+                window.pvpPrepAudio.volume = 0.5;
+
+                const playPromise = window.pvpPrepAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log("[BGM] beforepvp.mp3 再生成功！");
+                    }).catch(err => {
+                        console.error("[BGM] beforepvp.mp3 再生失敗（パスまたは形式エラーの可能性）:", err);
+                    });
+                }
+            } catch (e) {
+                console.error("[BGM] Audio作成時エラー:", e);
+            }
+        }
+
         // ==========================================
         // 2. メニュー生成
         // ==========================================
@@ -249,7 +298,11 @@
                 icon: 'fa-swords',
                 badge: 'コインGET',
                 enabled: true,
-                onClick: () => {}
+                onClick: () => {
+                    playBeforePvPBGM(); // ★ 戦闘準備曲再生
+                    renderOpponentModal();
+                    document.getElementById('opponent-select-modal')?.classList.remove('hidden');
+                }
             },
             {
                 id: 'btn-p2p-battle',
@@ -258,8 +311,10 @@
                 badge: '通信対戦',
                 enabled: true,
                 onClick: () => {
-                    // P2P部屋画面へ遷移
-                    window.location.href = 'p2p_room.html';
+                    playBeforePvPBGM(); // ★ 戦闘準備曲再生
+                    setTimeout(() => {
+                        window.location.href = 'p2p_room.html';
+                    }, 100);
                 }
             }, 
             {
@@ -551,39 +606,69 @@
             const modalVs = document.getElementById('modal-vs-confirm');
 
             const btnFreeBattle = document.getElementById('btn-free-battle');
+            const btnP2PBattle = document.getElementById('btn-p2p-battle'); // ★ 追加
             const btnOpponentClose = document.getElementById('btn-modal-close');
             const btnStartBattle = document.getElementById('btn-start-battle');
             const btnDeckCancel = document.getElementById('btn-close-deck-select');
             const btnVsCancel = document.getElementById('btn-vs-cancel');
             const btnVsStart = document.getElementById('btn-vs-start');
 
-            // 1. 【フリーバトル】ボタンを押したとき ➔ 対戦相手選択画面を開く
+            // 1. 【フリーバトル】ボタンを押したとき ➔ BGM再生 ＆ モーダルオープン
             if (btnFreeBattle) {
                 btnFreeBattle.onclick = () => {
+                    console.log("[CLICK] フリーバトルが押されました");
+                    playBeforePvPBGM();
                     renderOpponentModal();
                     modalOpponent?.classList.remove('hidden');
                 };
             }
 
-            // 2. 対戦相手画面の【戻る】ボタン ➔ タイトルへ戻る（モーダルを閉じる）
+            // 1-2. 【対戦 (P2P)】ボタンを押したとき ➔ BGM再生 ＆ ページ遷移
+            if (btnP2PBattle) {
+                btnP2PBattle.onclick = () => {
+                    console.log("[CLICK] 対戦(P2P)が押されました");
+                    playBeforePvPBGM();
+                    setTimeout(() => {
+                        window.location.href = 'p2p_room.html';
+                    }, 100);
+                };
+            }
+
+            // 2. 対戦相手画面の【戻る】ボタン ➔ 準備BGMを止めてタイトルBGMを再開し、モーダルを閉じる
             btnOpponentClose?.addEventListener('click', () => {
+                // ① 戦闘準備BGM（beforepvp）を停止
+                if (window.pvpPrepAudio) {
+                    try {
+                        window.pvpPrepAudio.pause();
+                        window.pvpPrepAudio.currentTime = 0;
+                    } catch (e) {}
+                    window.pvpPrepAudio = null;
+                }
+
+                // ② タイトルBGMを再開
+                const titleBgm = document.getElementById('bgm-title');
+                if (titleBgm) {
+                    titleBgm.play().catch(err => console.log("タイトルBGM再開エラー:", err));
+                }
+
+                // ③ モーダルを非表示
                 modalOpponent?.classList.add('hidden');
             });
 
-            // 3. 対戦相手画面の【出陣】ボタン ➔ 対戦相手画面を隠し、デッキ選択画面を開く
+            // 3. 対戦相手画面の【出陣】ボタン
             btnStartBattle?.addEventListener('click', () => {
                 modalOpponent?.classList.add('hidden');
                 renderBattleDeckList();
                 modalDeck?.classList.remove('hidden');
             });
 
-            // 4. デッキ選択画面の【キャンセル】ボタン ➔ デッキ選択を隠し、対戦相手画面へ戻る！
+            // 4. デッキ選択画面の【キャンセル】ボタン
             btnDeckCancel?.addEventListener('click', () => {
                 modalDeck?.classList.add('hidden');
                 modalOpponent?.classList.remove('hidden');
             });
 
-            // 5. VS確認画面の【いいえ】ボタン ➔ VS画面を隠し、デッキ選択画面へ戻る
+            // 5. VS確認画面の【いいえ】ボタン
             btnVsCancel?.addEventListener('click', () => {
                 modalVs?.classList.add('hidden');
                 modalDeck?.classList.remove('hidden');
@@ -591,6 +676,12 @@
 
             // 6. VS確認画面の【はい（バトル開始）】 ➔ ゲーム画面へ遷移
             btnVsStart?.addEventListener('click', () => {
+                // 出陣時に準備BGMを停止
+                if (window.pvpPrepAudio) {
+                    try { window.pvpPrepAudio.pause(); } catch(e){}
+                    window.pvpPrepAudio = null;
+                }
+
                 const battleConfig = {
                     opponentId: selectedOpponent.id,
                     opponentName: selectedOpponent.name,
@@ -706,14 +797,79 @@
         initTitleData().catch(err => console.error("データロードエラー:", err));
     });
     
-        // ==========================================
-        // P2P対戦ボタン押下処理
+    // ==========================================
+        // P2P通信モーダル制御処理 (PeerJS連動)
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
-            const btnP2p = document.getElementById('btn-p2p-battle');
-            if (btnP2p) {
-                btnP2p.onclick = () => {
-                    window.location.href = 'p2p_room.html';
+            let p2pNetwork = null;
+
+            const p2pInitBtn = document.getElementById('btn-p2p-init');
+            const p2pConnectBtn = document.getElementById('btn-p2p-connect');
+            const p2pCloseBtn = document.getElementById('btn-p2p-close');
+            const p2pModal = document.getElementById('p2p-match-modal');
+            const p2pStatusLog = document.getElementById('p2p-modal-status-log');
+            const p2pMyIdDisplay = document.getElementById('p2p-my-id-display');
+
+            function logP2P(msg) {
+                if (!p2pStatusLog) return;
+                const div = document.createElement('div');
+                div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                p2pStatusLog.appendChild(div);
+                p2pStatusLog.scrollTop = p2pStatusLog.scrollHeight;
+            }
+
+            if (p2pCloseBtn) {
+                p2pCloseBtn.onclick = () => {
+                    if (p2pModal) p2pModal.classList.add('hidden');
+                };
+            }
+
+            if (p2pInitBtn) {
+                p2pInitBtn.onclick = async () => {
+                    try {
+                        logP2P("初期化中...");
+
+                        if (!p2pNetwork) {
+                            const res = await fetch('./p2p_network.js');
+                            const jsText = await res.text();
+                            const blob = new Blob([jsText], { type: 'application/javascript' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            const { P2PNetwork } = await import(blobUrl);
+
+                            p2pNetwork = new P2PNetwork();
+
+                            p2pNetwork.onConnectedCallback = (info) => {
+                                logP2P(`✅ 接続成功！ 対戦画面へ移動します...`);
+                                sessionStorage.setItem('isP2PMatch', 'true');
+                                setTimeout(() => {
+                                    window.location.href = 'index.html';
+                                }, 1000);
+                            };
+                        }
+
+                        const id = await p2pNetwork.init();
+                        if (p2pMyIdDisplay) p2pMyIdDisplay.innerText = id;
+                        logP2P(`ID発行成功: ${id}`);
+                    } catch (e) {
+                        console.error(e);
+                        logP2P(`起動失敗: ${e.message || e}`);
+                    }
+                };
+            }
+
+            if (p2pConnectBtn) {
+                p2pConnectBtn.onclick = () => {
+                    const targetId = document.getElementById('p2p-target-id-input')?.value;
+                    if (!targetId) {
+                        logP2P("⚠️ 相手のIDを入力してください。");
+                        return;
+                    }
+                    if (!p2pNetwork) {
+                        logP2P("⚠️ 先に「1. ID発行・接続開始」を押してください。");
+                        return;
+                    }
+                    p2pNetwork.connectToHost(targetId);
+                    logP2P(`接続試行中: ${targetId}...`);
                 };
             }
         });
