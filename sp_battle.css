@@ -606,4 +606,358 @@
         0% { opacity: 0.3; transform: translateY(-50%) scale(0.9); }
         100% { opacity: 1; transform: translateY(-50%) scale(1.1); }
     }
+
+    /* --- 7. 出撃確認モーダル スマホ縦持ち最適化 --- */
+@media (max-width: 767px) {
+
+    /* モーダル背景コンテナ */
+    #battle-confirm-modal {
+        padding: 8px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* モーダル本体（ダイアログ） */
+    #battle-confirm-modal > div {
+        padding: 10px 12px !important;
+        border-radius: 12px !important;
+        max-height: 96dvh !important;
+        width: 96vw !important;
+        max-width: 96vw !important;
+        gap: 6px !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+    }
+
+    /* ヘッダータイトル */
+    #battle-confirm-modal h3 {
+        font-size: 1.1rem !important;
+        padding-bottom: 4px !important;
+        margin: 0 !important;
+    }
+
+    #battle-confirm-modal p {
+        font-size: 10px !important;
+        margin: 0 !important;
+    }
+
+    /* ① 出撃カード3枚表示エリア */
+    #modal-confirm-card-list {
+        padding: 4px !important;
+        gap: 6px !important;
+        border-radius: 8px !important;
+    }
+
+    #modal-confirm-card-list > div {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    #modal-confirm-card-list .aspect-\[3\/4\] {
+        border-radius: 6px !important;
+        margin-bottom: 2px !important;
+    }
+
+    #modal-confirm-card-list div[class*="text-"] {
+        font-size: 10px !important;
+        line-height: 1.1 !important;
+    }
+
+    /* ② じゃんけん / ポーカー役枠（横並びコンパクト化） */
+    #battle-confirm-modal > div > div.grid-cols-2:nth-of-type(1) {
+        gap: 6px !important;
+    }
+
+    #battle-confirm-modal > div > div.grid-cols-2:nth-of-type(1) > div {
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        font-size: 11px !important;
+    }
+
+    /* ③ 発動特性エリア（コンパクト2列表示） */
+    #battle-confirm-modal > div > div.bg-slate-950:nth-of-type(2) {
+        padding: 4px 6px !important;
+        border-radius: 8px !important;
+    }
+
+    #battle-confirm-modal > div > div.bg-slate-950:nth-of-type(2) > div:first-child {
+        font-size: 10px !important;
+        margin-bottom: 2px !important;
+    }
+
+    #modal-confirm-tags {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 3px 4px !important;
+        padding: 0 !important;
+    }
+
+    #modal-confirm-tags > div {
+        min-height: 24px !important;
+        height: 24px !important;
+        padding: 0 4px !important;
+        font-size: 9.5px !important;
+        border-radius: 5px !important;
+    }
+
+    /* ④ 予測 ATK / DEF（高さを揃えてコンパクト化） */
+    #battle-confirm-modal > div > div.grid-cols-2:nth-of-type(2) {
+        gap: 6px !important;
+        padding-top: 0 !important;
+    }
+
+    #battle-confirm-modal > div > div.grid-cols-2:nth-of-type(2) > div {
+        padding: 4px 6px !important;
+        border-radius: 8px !important;
+    }
+
+    #battle-confirm-modal > div > div.grid-cols-2:nth-of-type(2) span:first-child {
+        font-size: 10px !important;
+    }
+
+    #modal-confirm-atk,
+    #modal-confirm-def {
+        font-size: 1.25rem !important;
+        line-height: 1 !important;
+    }
+
+    /* ⑤ はい / キャンセル ボタンエリア */
+    #battle-confirm-modal > div > div.flex {
+        gap: 6px !important;
+        padding-top: 2px !important;
+    }
+
+    #btn-modal-confirm,
+    #btn-modal-cancel {
+        padding: 8px 0 !important;
+        font-size: 12px !important;
+        border-radius: 8px !important;
+    }
+}
+
+/* --- 8. 合戦結果モーダル（レシート明細） スマホ縦持ち最適化 --- */
+@media (max-width: 767px) {
+
+    /* モーダル背景コンテナ */
+    #turn-result-modal {
+        padding: 6px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* モーダルダイアログ本体 */
+    #turn-result-modal > div {
+        padding: 8px 10px !important;
+        border-radius: 12px !important;
+        max-height: 96dvh !important;
+        width: 96vw !important;
+        max-width: 96vw !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* タイトルヘッダー */
+    #turn-result-modal h2 {
+        font-size: 1.05rem !important;
+        padding-bottom: 4px !important;
+        margin-bottom: 6px !important;
+    }
+
+    /* 左右グリッド構造（左: 明細 9列 / 右: 陣切替 3列） */
+    #turn-result-modal .grid-cols-12 {
+        gap: 6px !important;
+    }
+
+    /* 左側: スクロール明細エリア */
+    #turn-result-modal .col-span-9,
+    #turn-result-modal .col-span-10 {
+        padding-right: 2px !important;
+    }
+
+    /* 明細内テキスト・行のコンパクト化 */
+    #turn-result-modal .text-xs {
+        font-size: 10px !important;
+    }
+
+    #turn-result-modal .text-\[11px\] {
+        font-size: 9.5px !important;
+    }
+
+    #turn-result-modal .text-\[10px\] {
+        font-size: 9px !important;
+    }
+
+    /* 参戦者ミニカード画像 */
+    #res-p-cards, #res-c-cards {
+        gap: 2px !important;
+    }
+
+    #res-p-cards img, #res-c-cards img {
+        border-radius: 4px !important;
+    }
+
+    /* 中間ステータス・最終ステータス枠の余白圧縮 */
+    #turn-result-modal .bg-slate-900\/60,
+    #turn-result-modal .bg-slate-900\/90 {
+        padding: 6px !important;
+        margin-top: 4px !important;
+        margin-bottom: 4px !important;
+        border-radius: 8px !important;
+    }
+
+    /* 右側: 陣履歴タブコンテナ */
+    #turn-result-modal .col-span-3,
+    #turn-result-modal .col-span-2 {
+        padding-left: 4px !important;
+        gap: 4px !important;
+    }
+
+    #result-turn-tab-container {
+        gap: 4px !important;
+    }
+
+    /* 陣履歴切替ボタン本体 */
+    #result-turn-tab-container button {
+        padding: 6px 2px !important;
+        font-size: 9.5px !important;
+        border-radius: 6px !important;
+        line-height: 1.1 !important;
+    }
+
+    /* 最下部：「次のターンへ進む」ボタン */
+    #btn-next-turn {
+        margin-top: 6px !important;
+        padding: 8px 0 !important;
+        font-size: 12px !important;
+        border-radius: 8px !important;
+    }
+}
+
+/* --- 9. 勝敗1枚絵カットインモーダル スマホ縦持ち完全最適化（完全16:9フィット版） --- */
+@media (max-width: 767px) {
+
+    /* 非表示時は判定無効化 */
+    div#game-result-cutin-modal.hidden {
+        display: none !important;
+        pointer-events: none !important;
+    }
+
+    /* モーダル全体：上下均等配置 */
+    div#game-result-cutin-modal:not(.hidden) {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100dvh !important;
+        padding: 0 !important;
+        border: none !important;
+        background: #05040a !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        pointer-events: auto !important;
+        z-index: 9999 !important;
+        overflow: hidden !important;
+    }
+
+    /* ① 1枚絵コンテナ：横幅100vw × 16:9（高さ56.25vw）でガチガチに固定 */
+    div#game-result-cutin-modal img#result-cutin-img,
+    div#game-result-cutin-modal div.relative.w-full.h-full,
+    div#game-result-cutin-modal > div:first-child {
+        position: relative !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 56.25vw !important; /* 100vw に対する 16:9 の高さを明示 */
+        max-height: 56.25vw !important;
+        
+        margin-top: auto !important;
+        margin-bottom: auto !important;
+        
+        aspect-ratio: 16 / 9 !important;
+        box-sizing: border-box !important;
+
+        /* 金のライン：太さ6pxのグラデーション線 */
+        border-top: 6px solid transparent !important;
+        border-bottom: 6px solid transparent !important;
+        border-image: linear-gradient(to right, #6e551c, #f7d070, #fff8dc, #f7d070, #6e551c) 1 !important;
+        
+        box-shadow: 0 0 20px rgba(247, 208, 112, 0.4) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #000000 !important;
+        flex-shrink: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* ★ 変更点：画像自体も16:9の枠内に「cover」で隙間なく隙間ゼロで広げる */
+    img#result-cutin-img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important; /* contain から cover に変更して左右の黒隙間を消去 */
+        object-position: center center !important;
+        pointer-events: none !important;
+        margin: 0 !important;
+        border: none !important;
+    }
+
+    /* 不要な黒グラデーションオーバーレイを消去 */
+    div#game-result-cutin-modal div.absolute.bg-gradient-to-t {
+        display: none !important;
+    }
+
+    /* ② ボタンコンテナ：最下部に固定配置 */
+    div#game-result-cutin-modal div.absolute.bottom-6,
+    div#game-result-cutin-modal div.flex.flex-col {
+        position: relative !important;
+        left: auto !important;
+        transform: none !important;
+        bottom: auto !important;
+        margin-top: 0 !important;
+        margin-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 20px !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        align-items: center !important;
+        z-index: 10000 !important;
+        pointer-events: auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* ボタンデザイン */
+    div#game-result-cutin-modal button {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 320px !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        font-size: 13px !important;
+        font-weight: bold !important;
+        border-radius: 10px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        border: 2px solid #e2b34c !important;
+        background: linear-gradient(to bottom, #161e2e 0%, #0d131f 100%) !important;
+        color: #f7d070 !important;
+        pointer-events: auto !important;
+    }
+
+    div#game-result-cutin-modal button:active {
+        opacity: 0.8 !important;
+        background: #1e293b !important;
+    }
+}
+
 } /* ★ ここに移動して @media 全体を閉じる */

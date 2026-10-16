@@ -1,0 +1,320 @@
+/* ==========================================================================
+   『大和の縁 〜あやふだかぞえ〜』 Deck Editor Mobile Optimization (sp_deck.css)
+   ========================================================================== */
+
+@media (max-width: 767px) {
+
+    /* --- 1. 全体コンテナ（左右均等6pxスキマ完全固定） --- */
+    html, body {
+        height: 100dvh !important;
+        width: 100vw !important;
+        overflow: hidden !important;
+        padding: 4px 0 !important; /* 左右の余白はコンテナ側で計算固定 */
+        box-sizing: border-box !important;
+    }
+
+    body > div.max-w-7xl {
+        height: 100dvh !important;
+        min-height: 100dvh !important;
+        max-height: 100dvh !important;
+        width: calc(100vw - 12px) !important; /* 画面幅より左右6pxずつ小さくして隙間を強制作成 */
+        margin: 0 auto !important; /* 左右中央寄せで均等配置 */
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        gap: 4px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* --- 2. ヘッダーエリア --- */
+    header {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+        padding-bottom: 2px !important;
+        flex-shrink: 0 !important;
+    }
+
+    header h1 {
+        font-size: 13px !important;
+    }
+
+    header div.absolute.left-1\/2 {
+        position: relative !important;
+        left: auto !important;
+        transform: none !important;
+        order: 3 !important;
+        width: 100% !important;
+        justify-content: center !important;
+        margin-top: 1px !important;
+        padding: 2px 6px !important;
+    }
+
+    header input#deck-name-input {
+        width: 140px !important;
+        font-size: 12px !important;
+    }
+
+    header button#btn-open-load-modal,
+    header button#btn-back-to-title {
+        padding: 3px 6px !important;
+        font-size: 10px !important;
+        border-radius: 6px !important;
+    }
+
+    /* --- 3. 編成中スロット（横6枚表示） --- */
+    section.bg-slate-900\/90 {
+        padding: 4px 6px !important;
+        border-radius: 8px !important;
+        flex-shrink: 0 !important;
+    }
+
+    section.bg-slate-900\/90 .mb-1\.5 {
+        margin-bottom: 2px !important;
+    }
+
+    #slots-20-container {
+        display: grid !important;
+        grid-template-columns: repeat(10, minmax(calc((100vw - 36px) / 6), 1fr)) !important;
+        grid-template-rows: repeat(2, auto) !important;
+        grid-auto-flow: column !important;
+        gap: 3px !important;
+        width: 100% !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scroll-snap-type: x mandatory !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 2px !important;
+    }
+
+    #slots-20-container > div {
+        scroll-snap-align: start !important;
+        border-radius: 4px !important;
+    }
+
+    #slots-20-container button {
+        width: 14px !important;
+        height: 14px !important;
+        font-size: 7px !important;
+        top: 2px !important;
+        right: 2px !important;
+    }
+
+    /* --- 4. メイン領域 ＆ 所持カード表示エリア --- */
+    main.grid-cols-12 {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        gap: 4px !important;
+        position: relative !important; /* 絶対配置の基準点をメインエリアに固定 */
+    }
+
+    /* 所持カードエリア（高さ最大化） */
+    main section.col-span-9 {
+        width: 100% !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        padding: 6px !important;
+        border-radius: 8px !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* ヘッダータイトル行 */
+    main section.col-span-9 > div.flex {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding-bottom: 3px !important;
+    }
+
+    /* JOKER / 配下英傑 グリッド（横6列） */
+    #joker-collection-grid,
+    #normal-collection-grid {
+        grid-template-columns: repeat(6, 1fr) !important;
+        gap: 3px !important;
+    }
+
+    #joker-collection-grid .group span,
+    #normal-collection-grid .group span {
+        font-size: 7px !important;
+        padding: 1px 3px !important;
+    }
+
+    #joker-collection-grid button,
+    #normal-collection-grid button {
+        width: 14px !important;
+        height: 14px !important;
+        font-size: 7px !important;
+        top: 2px !important;
+        right: 2px !important;
+    }
+
+    /* --- 5. 絞り込みボタン（元テキスト「条件を指定して絞り込む」完全表示版） --- */
+    main aside.col-span-3 > div.space-y-2\.5 {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        height: 0 !important;
+    }
+
+    main aside.col-span-3 h2,
+    #active-tag-filter-box {
+        display: none !important;
+    }
+
+    /* ボタン本体：位置固定 */
+    #btn-open-tag-modal {
+        position: absolute !important;
+        top: -8px !important; /* ご調整いただいた完璧な位置 */
+        right: 70px !important; /* 73枚表示のすぐ左側 */
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 3px !important;
+        padding: 2px 8px !important;
+        height: 20px !important;
+        width: auto !important;
+        font-size: 10px !important;
+        font-weight: bold !important;
+        border-radius: 5px !important;
+        background: #0f172a !important;
+        border: 1px solid rgba(245, 158, 11, 0.8) !important;
+        color: #f7d070 !important;
+        z-index: 10 !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.5) !important;
+    }
+
+    /* 元のテキスト「条件を指定して絞り込む」をそのまま綺麗に全表示 */
+    #btn-open-tag-modal span:not(#tag-filter-count-badge) {
+        font-size: 10px !important;
+        display: inline !important;
+        max-width: none !important;
+        overflow: visible !important;
+        white-space: nowrap !important;
+    }
+
+    /* 擬似要素は完全にオフ */
+    #btn-open-tag-modal span:not(#tag-filter-count-badge)::after {
+        content: none !important;
+    }
+
+    #btn-open-tag-modal i {
+        font-size: 9px !important;
+    }
+
+    /* --- 6. 下部操作ボタンエリア（画面底面接地ドック風デザイン） --- */
+    main aside.col-span-3 {
+        width: 100% !important;
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        flex-shrink: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    main aside.col-span-3 > div.w-full {
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 6px !important;
+        width: 100% !important;
+    }
+
+    /* 特性チェックボタン（左側：明るいネイビー塗り＋ゴールド文字で底面固定風） */
+    #btn-check-traits {
+        flex: 1 !important;
+        width: 50% !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        margin: 0 !important;
+        padding: 0 4px !important;
+        font-size: 11px !important;
+        font-weight: bold !important;
+        border-radius: 8px 8px 0 0 !important; /* 下側の角丸をフラットにして底面に密着 */
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important; /* しっかりした塗り背景 */
+        border: 1px solid rgba(245, 158, 11, 0.6) !important;
+        border-bottom: none !important; /* 下枠線をあえて消して画面底面と同化 */
+        color: #f7d070 !important;
+        white-space: nowrap !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+    }
+
+    /* デッキを保存するボタン（右側：ゴールド塗り・底面固定風） */
+    #btn-save-deck {
+        flex: 1 !important;
+        width: 50% !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        margin: 0 !important;
+        padding: 0 4px !important;
+        font-size: 12px !important;
+        font-weight: bold !important;
+        border-radius: 8px 8px 0 0 !important; /* 下側の角丸をフラットにして底面に密着 */
+        background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%) !important; /* 濃密なゴールドグラデ塗り */
+        border: 1px solid #fbbf24 !important;
+        border-bottom: none !important;
+        color: #0f172a !important;
+        white-space: nowrap !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+    }
+
+    /* バナー非表示 */
+    main aside.col-span-3 img[alt="タイトルバナー"],
+    main aside.col-span-3 div.w-full.flex.justify-center {
+        display: none !important;
+    }
+
+    /* --- 7. モーダル群 --- */
+    #modal-deck-load > div,
+    #modal-traits-check > div,
+    #modal-tag-filter > div {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        max-height: 90dvh !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+    }
+
+    #modal-card-detail > div {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        max-height: 92dvh !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+        overflow-y: auto !important;
+        gap: 8px !important;
+    }
+
+    #modal-card-detail .grid-cols-12 {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+
+    #modal-card-detail .col-span-5 {
+        width: 130px !important;
+        margin: 0 auto !important;
+    }
+
+    #modal-card-detail .col-span-7 {
+        width: 100% !important;
+        gap: 4px !important;
+    }
+}
