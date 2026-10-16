@@ -1346,8 +1346,8 @@ window.openCardDetail = function(cardId, event) {
 window.closeCardDetailModal = function() {
     const modal = document.getElementById('modal-card-detail');
     if (modal) {
-        modal.style.display = 'none';
         modal.classList.add('hidden');
+        modal.style.display = 'none'; // インラインでも直接非表示を強制
     }
 };
 

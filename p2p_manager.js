@@ -22,16 +22,24 @@ export class P2PManager {
 
         const container = document.createElement('div');
         container.id = 'p2p-timer-badge';
-        container.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900/90 border border-slate-700 px-4 py-2 rounded-full shadow-lg backdrop-blur';
+        container.className = 'flex items-center gap-1.5 bg-rose-950/80 border border-rose-600/80 px-2.5 py-1 rounded-xl text-xs font-bold text-rose-300 shadow-md flex-shrink-0';
 
         container.innerHTML = `
-            <span class="text-xs text-slate-400 font-bold uppercase tracking-wider">Turn Time</span>
-            <div id="p2p-timer-text" class="text-xl font-black text-amber-400 font-mono min-w-[3rem] text-center">
-                ⏳ 30s
+            <i class="fa-solid fa-hourglass-half text-rose-400 text-xs"></i>
+            <span class="text-[11px] text-rose-200">TIME</span>
+            <div id="p2p-timer-text" class="text-xs sm:text-sm font-black text-yellow-300 font-mono ml-0.5">
+                30s
             </div>
         `;
 
-        document.body.appendChild(container);
+        // ヘッダー左側コンテナ（タイトル画像の隣）へ動的追加
+        const headerLeft = document.querySelector('header > div > div:first-child');
+        if (headerLeft) {
+            headerLeft.appendChild(container);
+        } else {
+            document.body.appendChild(container);
+        }
+
         this.timerUIContainer = container;
         this.timerTextElement = document.getElementById('p2p-timer-text');
     }
@@ -73,14 +81,14 @@ export class P2PManager {
     updateTimerDisplay() {
         if (!this.timerTextElement) return;
 
-        this.timerTextElement.innerText = `⏳ ${this.timeLeft}s`;
+        this.timerTextElement.innerText = `${this.timeLeft}s`;
 
         if (this.timeLeft <= 5 && this.timeLeft > 0) {
-            this.timerTextElement.className = 'text-2xl font-black text-rose-500 font-mono min-w-[3rem] text-center animate-ping';
-            this.timerUIContainer.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-rose-950/90 border-2 border-rose-500 px-5 py-2 rounded-full shadow-2xl backdrop-blur';
+            this.timerTextElement.className = 'text-xs sm:text-sm font-black text-rose-400 font-mono animate-pulse';
+            this.timerUIContainer.className = 'flex items-center gap-1.5 bg-rose-900/90 border-2 border-rose-500 px-2.5 py-1 rounded-xl text-xs font-bold text-white shadow-xl flex-shrink-0';
         } else {
-            this.timerTextElement.className = 'text-xl font-black text-amber-400 font-mono min-w-[3rem] text-center';
-            this.timerUIContainer.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900/90 border border-slate-700 px-4 py-2 rounded-full shadow-lg backdrop-blur';
+            this.timerTextElement.className = 'text-xs sm:text-sm font-black text-yellow-300 font-mono ml-0.5';
+            this.timerUIContainer.className = 'flex items-center gap-1.5 bg-rose-950/80 border border-rose-600/80 px-2.5 py-1 rounded-xl text-xs font-bold text-rose-300 shadow-md flex-shrink-0';
         }
     }
 

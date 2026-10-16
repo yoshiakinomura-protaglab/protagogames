@@ -16,6 +16,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Yuji+Boku&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="battle-animation.css">
+    <link rel="stylesheet" href="sp_battle.css">
 
     <style>
         body {
@@ -29,6 +30,33 @@
             overflow: hidden;
         }
         .font-yuji { font-family: 'Yuji Boku', serif; }
+
+        /* 金色グラデーション文字 */
+        .gold-text {
+            background: linear-gradient(135deg, #fff7ed 0%, #fef08a 25%, #eab308 60%, #ca8a04 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 金色の粒子ボケ（Gold Bokeh Particle） */
+        .gold-particle {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(254, 240, 138, 0.9) 0%, rgba(234, 179, 8, 0.6) 50%, rgba(202, 138, 4, 0) 100%);
+            pointer-events: none;
+            animation: floatParticle 2.5s infinite ease-in-out;
+        }
+
+        @keyframes floatParticle {
+            0%, 100% {
+                transform: translateY(0) scale(0.8);
+                opacity: 0.3;
+            }
+            50% {
+                transform: translateY(-6px) scale(1.2);
+                opacity: 0.95;
+            }
+        }
     </style>
 </head>
 
@@ -127,16 +155,22 @@
          バトル本体 UI 描画コンテナ
          ========================================================== -->
     <header class="w-full bg-slate-950/80 border-b border-slate-800">
-        <div class="max-w-7xl w-full mx-auto px-2 py-2.5 relative flex items-center justify-between">
+        <div class="max-w-7xl w-full mx-auto px-2 py-2.5 relative flex items-center justify-between gap-2">
+            
+            <!-- 【左側】タイトルロゴバナー -->
             <div class="flex items-center min-w-[240px] max-w-[280px] sm:max-w-[360px] h-full">
                 <img src="images/titlebanner.jpg" alt="大和の縁" class="w-full h-auto max-h-12 sm:max-h-16 object-contain block select-none mix-blend-screen">
             </div>
+
+            <!-- 【中央】戦闘開始ボタン（この中身はJSで状態変更されます） -->
             <div class="absolute left-1/2 -translate-x-1/2 w-full max-w-[260px] text-center z-10">
                 <button id="btn-battle-start" disabled class="w-full py-2.5 sm:py-3 px-5 rounded-xl text-sm sm:text-base font-black bg-slate-900/90 text-slate-400 border border-slate-800 opacity-70 cursor-not-allowed">
                     カード選択中 (0/3)
                 </button>
             </div>
-            <div class="flex items-center gap-3">
+
+            <!-- 【右側】合戦進行 ＋ イラスト切替 -->
+            <div class="flex items-center gap-2 sm:gap-3">
                 <div class="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold text-amber-300">
                     <span>合戦進行</span>
                     <span id="current-turn-num" class="font-mono text-sm sm:text-base text-yellow-300">1/5</span>
@@ -147,6 +181,7 @@
                     <span id="img-mode-label">イラスト</span>
                 </button>
             </div>
+
         </div>
     </header>
 

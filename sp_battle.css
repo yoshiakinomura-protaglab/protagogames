@@ -35,41 +35,49 @@
         position: relative !important;
     }
 
-    /* 【1段目・左】タイトル画像 */
+    /* 【1段目＆2段目・左】タイトル画像＋タイマーを入れた左側枠コンテナ */
     header > div > div:first-child {
-        grid-column: 1 / 2 !important;
-        grid-row: 1 / 2 !important;
+        grid-column: 1 / 2 !important;        /* 1列目（画面左半分） */
+        grid-row: 1 / 3 !important;         /* 1段目から2段目まで使用 */
         display: flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
+        flex-direction: column !important;    /* タイトル画像の下にタイマーを配置 */
+        align-items: stretch !important;      /* タイマーの幅を枠いっぱいに広げる */
+        justify-content: flex-end !important; /* ★ 下揃えにして右側ボタンと下端ラインを1px単位で完全一致させる */
+        gap: 2px !important;
         min-width: 0 !important;
+        width: 100% !important;
         max-width: 100% !important;
-        height: 30px !important;
+        height: 62px !important;
     }
 
     header > div > div:first-child img {
-        height: 30px !important;
-        max-height: 30px !important;
+        height: 28px !important;
+        max-height: 28px !important;
         width: auto !important;
         object-fit: contain !important;
         object-position: left center !important;
     }
 
-    /* 【2段目・左】タイマー */
+    /* ★【2段目・左】タイマー（右側の戦闘開始ボタンと高さ30px・幅100%・角丸8pxを完全に同期） */
     #turn-timer-display,
-    [id*="timer"] {
-        grid-column: 1 / 2 !important;
-        grid-row: 2 / 3 !important;
-        margin: 0 !important;
+    [id*="timer"],
+    #p2p-timer-badge {
+        width: 100% !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        max-height: 30px !important;
         padding: 0 8px !important;
         font-size: 11px !important;
-        border-radius: 8px !important;
-        height: 30px !important;
+        border-radius: 8px !important;        /* 右側ボタンと同じ角丸サイズ */
         display: flex !important;
         align-items: center !important;
-        justify-content: flex-start !important;
+        justify-content: center !important;  /* タイマーテキストを中央揃え */
         box-sizing: border-box !important;
-        justify-self: start !important;
+        margin: 0 !important;
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        transform: none !important;
     }
 
     /* 【1段目・右】合戦進行 ＆ イラスト切替ボタン */
@@ -113,25 +121,28 @@
         box-sizing: border-box !important;
     }
 
-    /* 【2段目・右】戦闘開始ボタン */
+    /* 【2段目・右】戦闘開始ボタン枠（画面右半分） */
     header > div > div.absolute {
         position: relative !important;
         left: auto !important;
         top: auto !important;
         transform: none !important;
-        grid-column: 2 / 3 !important;
-        grid-row: 2 / 3 !important;
+        grid-column: 2 / 3 !important;        /* 2列目（画面右半分） */
+        grid-row: 2 / 3 !important;          /* 2段目 */
         width: 100% !important;
         max-width: 100% !important;
         justify-self: end !important;
         height: 30px !important;
     }
 
+    /* ★【2段目・右】戦闘開始ボタン本体（高さ30px・幅100%・角丸8pxでタイマーと完全同期） */
     #btn-battle-start {
-        padding: 0 8px !important;
-        font-size: 11px !important;
+        width: 100% !important;
         height: 30px !important;
         min-height: 30px !important;
+        max-height: 30px !important;
+        padding: 0 8px !important;
+        font-size: 11px !important;
         border-radius: 8px !important;
         display: flex !important;
         align-items: center !important;
@@ -422,26 +433,20 @@
         line-height: 1 !important;
     }
 
-/* --- 6. 下段：手札エリア（カード枠・選択枠の見切れ完全防止版） --- */
+/* --- 6. 下段：手札エリア --- */
     #tab-battle > div.bg-slate-900\/90 {
-        padding: 6px 4px !important;            /* 上下に少しゆとりを持たせて青枠の見切れを防止 */
+        padding: 6px 4px !important;
         border-radius: 12px !important;
         flex: 1 1 0% !important;
         height: auto !important;
         min-height: 0 !important;
-        max-height: none !important;
         width: 100% !important;
         margin: 0 !important;
         box-sizing: border-box !important;
         display: flex !important;
         align-items: center !important;
-        overflow: hidden !important;
-    }
-
-    /* 手札枠コンテナ：上下のオーバーフローを許可して拡大・枠線見切れを防止 */
-    #tab-battle > div.bg-slate-900\/90 {
-        padding: 6px 4px !important;            /* 上下にゆとりを確保 */
-        overflow: visible !important;           /* 選択時の拡大・枠のはみ出しを綺麗に表示 */
+        overflow: visible !important;
+        position: relative !important;
     }
 
     /* 手札スクロールコンテナ */
@@ -490,7 +495,7 @@
         overflow: hidden !important;
     }
 
-    /* 上段ヘッダー：武将名だけを残して右側のバッジ（じゃんけん・ポーカー）を非表示 */
+    /* ★ 武将名ヘッダー：武将名のみ残し、右側の重複バッジ（じゃんけん・ポーカー手）を完全非表示 */
     #player-hand-container .card-container > div:first-child {
         display: flex !important;
         padding: 2px 4px !important;
@@ -502,36 +507,35 @@
         line-height: 1.1 !important;
     }
 
-    /* 右側のバッジ2つ（span）を非表示 */
     #player-hand-container .card-container > div:first-child > span {
-        display: none !important;
+        display: none !important;        /* ★ 右側の重複バッジ（じゃんけん・ポーカー）を隠す */
     }
 
-    /* 下段：特性タグボックス全体を非表示 */
+    /* ★ カード下段：重複する特性タグボックス全体を非表示 */
     #player-hand-container .card-container > div:last-child {
-        display: none !important;
+        display: none !important;        /* ★ 下段の特性タグを非表示にして縦幅を画像一杯に広げる */
     }
 
-    /* ★ 左上8個縦一列アイコン列（スマホ時のみ表示・12px×12px・gap:1px で8個完全収容） */
-    .card-status-icon-column {
+    /* ★ 左上8個縦一列アイコン列のスマホ位置調整 */
+    #player-hand-container .card-status-icon-column {
         display: flex !important;
         flex-direction: column !important;
-        gap: 1px !important;
+        gap: 2px !important;
         position: absolute !important;
-        top: 2px !important;
-        left: 2px !important;
+        top: 3px !important;
+        left: 3px !important;
         z-index: 25 !important;
     }
 
     #player-hand-container .card-status-icon-column > div {
-        width: 12px !important;
-        height: 12px !important;
-        min-width: 12px !important;
-        min-height: 12px !important;
-        border-radius: 2px !important;
-        font-size: 7px !important;
+        width: 14px !important;
+        height: 14px !important;
+        min-width: 14px !important;
+        min-height: 14px !important;
+        border-radius: 3px !important;
+        font-size: 8px !important;
         line-height: 1 !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.9) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.8) !important;
     }
 
     /* 虫眼鏡ボタンの位置調整（画像内の右上 ＆ タップイベント有効化） */
@@ -557,9 +561,49 @@
     }
 
 /* --- 手札エリアの左右スクロール誘導ネオン矢印 --- */
-...（中略）...
+    #tab-battle > div.bg-slate-900\/90 {
+        position: relative !important; /* 矢印の位置基準 */
+    }
+
+    /* 左矢印 << */
+    #tab-battle > div.bg-slate-900\/90::before {
+        content: "<<" !important;
+        position: absolute !important;
+        left: 4px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        z-index: 10 !important;
+        font-family: monospace !important;
+        font-weight: 900 !important;
+        font-size: 14px !important;
+        color: #00ffcc !important;
+        text-shadow: 0 0 6px #00ffcc, 0 0 12px #00ffcc !important;
+        pointer-events: none !important;
+        opacity: 0.8 !important;
+        animation: pulseNeon 1.5s infinite alternate !important;
+    }
+
+    /* 右矢印 >> */
+    #tab-battle > div.bg-slate-900\/90::after {
+        content: ">>" !important;
+        position: absolute !important;
+        right: 4px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        z-index: 10 !important;
+        font-family: monospace !important;
+        font-weight: 900 !important;
+        font-size: 14px !important;
+        color: #00ffcc !important;
+        text-shadow: 0 0 6px #00ffcc, 0 0 12px #00ffcc !important;
+        pointer-events: none !important;
+        opacity: 0.8 !important;
+        animation: pulseNeon 1.5s infinite alternate !important;
+    }
+
+    /* ネオンの点滅アニメーション定義 */
     @keyframes pulseNeon {
         0% { opacity: 0.3; transform: translateY(-50%) scale(0.9); }
         100% { opacity: 1; transform: translateY(-50%) scale(1.1); }
     }
-}
+} /* ★ ここに移動して @media 全体を閉じる */
