@@ -960,4 +960,43 @@
     }
 }
 
+/* ==========================================
+   スマホ表示用：戦闘演出モーダルの高さ自動フィット
+   ========================================== */
+
+/* 1. モーダル全体を動的ビューポート（dvh）に合わせてスクロール不要な構成に固定 */
+#battle-animation-overlay,
+.battle-animation-modal {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    padding-top: env(safe-area-inset-top, 8px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 8px) !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+/* 2. 画面高さが低い端末でのサイズ最適化（フレキシブル圧縮） */
+@media (max-height: 750px) {
+    .battle-animation-modal .card-container,
+    .battle-animation-modal img {
+        max-height: 180px !important;
+        object-fit: contain !important;
+    }
+
+    .battle-animation-modal .text-3xl,
+    .battle-animation-modal .text-4xl {
+        font-size: 1.5rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .battle-animation-modal .py-3,
+    .battle-animation-modal .py-4 {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+    }
+}
+
 } /* ★ ここに移動して @media 全体を閉じる */

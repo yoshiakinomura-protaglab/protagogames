@@ -1,4 +1,8 @@
 joker_id,name,win_perfect,win_normal,lose_normal,lose_perfect
 c05000,卑弥呼,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
 c10000,日本武尊,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
-c15000,天智天皇,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
+c95000,コッキー,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
+c97000,男性主人公,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
+c97001,男性主人公★,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
+c97002,女性主人公,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
+c97003,女性主人公★,himiko_win_p.jpg,himiko_win_n.jpg,himiko_lose_n.jpg,himiko_lose_p.jpg
