@@ -961,50 +961,57 @@
 }
 
 /* =================================================== */
-/* ★ 戦闘演出モーダル：flex構造 ＆ セーフエリア完全対応 */
+/* ★ 戦闘演出モーダル：全端末Safe Area完全フィット構造 */
 /* =================================================== */
 
-/* 1. 外枠オーバーレイ（背景）：画面の端から端（OSバーの裏）まで100%展開 */
+/* 1. モーダル本体は画面100%（100dvh）で固定し、スクロールを防止 */
 #battle-animation-overlay,
 .battle-animation-modal {
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
     height: 100dvh !important;
-    background: #000000 !important; /* 漆黒背景 */
+    max-height: 100dvh !important;
+    background: #000000 !important;
     z-index: 99999 !important;
     overflow: hidden !important;
     
-    /* 内側コンテンツの自動フレックス配置 */
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
 
-    /* ★ OSのステータスバー・ナビゲーションバー（3ボタン/ホームバー）を避けるセーフエリア余白 */
-    padding-top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
-    padding-bottom: max(calc(env(safe-area-inset-bottom, 0px) + 12px), 50px) !important;
-    padding-left: env(safe-area-inset-left, 8px) !important;
-    padding-right: env(safe-area-inset-right, 8px) !important;
+    /* 上部ステータスバーの回避 */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 4px) !important;
+    padding-left: env(safe-area-inset-left, 4px) !important;
+    padding-right: env(safe-area-inset-right, 4px) !important;
+    padding-bottom: 0 !important;
     box-sizing: border-box !important;
 }
 
-/* 2. スマホ縦持ち（767px以下）時の縦幅フレキシブル自動収縮 */
 @media (max-width: 767px) {
 
-    /* 上部武将カード（3枚）の画像をコンパクト化して中央スペースを確保 */
+    /* ★ 2. 最下段（味方ATK/DEF枠）だけを「OSバーの高さ + 12px」自動計算で持ち上げる */
+    #battle-animation-overlay > div:last-child,
+    .battle-animation-modal > div:last-child {
+        /* iPhoneのホームバー(34px)でもAndroidの3ボタン(48px)でも自動でその上へ持ち上がる */
+        margin-bottom: max(calc(env(safe-area-inset-bottom, 0px) + 12px), 48px) !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* 3. 上部武将カード画像（3枚）をコンパクト化して、持ち上がった分の中央余白を自動確保 */
     #battle-animation-overlay .card-container,
     #battle-animation-overlay img,
     .battle-animation-modal img {
-        max-height: 130px !important;
+        max-height: 115px !important;
         object-fit: contain !important;
     }
 
-    /* テロップ・攻撃力などの文字・数値をフレキシブルに微調整 */
+    /* 4. 巨大数値のフォントサイズ自動縮小 */
     #battle-animation-overlay .text-3xl,
     #battle-animation-overlay .text-4xl,
     .battle-animation-modal .text-3xl,
     .battle-animation-modal .text-4xl {
-        font-size: 1.3rem !important;
+        font-size: 1.2rem !important;
         line-height: 1.1 !important;
     }
 
@@ -1012,28 +1019,21 @@
     #battle-animation-overlay .text-6xl,
     .battle-animation-modal .text-5xl,
     .battle-animation-modal .text-6xl {
-        font-size: 2.0rem !important;
+        font-size: 1.75rem !important;
         line-height: 1.0 !important;
     }
 
-    /* 各ブロック間の縦余白を小さく詰める */
+    /* 5. 縦方向の各パディング・マージンを最小化 */
     #battle-animation-overlay .py-3,
     #battle-animation-overlay .py-4,
     #battle-animation-overlay .my-3,
     #battle-animation-overlay .my-4,
     .battle-animation-modal .py-3,
     .battle-animation-modal .py-4 {
-        padding-top: 2px !important;
-        padding-bottom: 2px !important;
-        margin-top: 2px !important;
-        margin-bottom: 2px !important;
-    }
-
-    /* 最下部（味方ATK/DEF）を底辺から浮き上がらせて変形防止 */
-    #battle-animation-overlay > div:last-child,
-    .battle-animation-modal > div:last-child {
-        flex-shrink: 0 !important;
-        margin-bottom: 0 !important;
+        padding-top: 1px !important;
+        padding-bottom: 1px !important;
+        margin-top: 1px !important;
+        margin-bottom: 1px !important;
     }
 }
 
