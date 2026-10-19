@@ -961,7 +961,7 @@
 }
 
 /* ==========================================
-   スマホ表示用：戦闘演出モーダルの高さ自動フィット
+   スマホ表示用：戦闘演出モーダルの高さ自動フィット（完全収まる版）
    ========================================== */
 
 /* 1. モーダル全体を動的ビューポート（dvh）に合わせてスクロール不要な構成に固定 */
@@ -972,31 +972,60 @@
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    padding-top: env(safe-area-inset-top, 8px) !important;
-    padding-bottom: env(safe-area-inset-bottom, 8px) !important;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 4px) !important;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px) !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
 }
 
-/* 2. 画面高さが低い端末でのサイズ最適化（フレキシブル圧縮） */
-@media (max-height: 750px) {
-    .battle-animation-modal .card-container,
+/* 2. スマホ画面（メディアクエリ）での各ブロック一括フレキシブル圧縮 */
+@media (max-width: 767px) {
+
+    /* 上部カード画像（3枚）を120px〜135pxまで縮小して縦幅を大幅確保 */
+    #battle-animation-overlay .card-container,
+    #battle-animation-overlay img,
     .battle-animation-modal img {
-        max-height: 180px !important;
+        max-height: 130px !important;
         object-fit: contain !important;
     }
 
+    /* 「勝負！」などの大きなカットイン文字・敵ATK/DEF文字を小さく圧縮 */
+    #battle-animation-overlay .text-3xl,
+    #battle-animation-overlay .text-4xl,
     .battle-animation-modal .text-3xl,
     .battle-animation-modal .text-4xl {
-        font-size: 1.5rem !important;
-        line-height: 1.2 !important;
+        font-size: 1.3rem !important;
+        line-height: 1.1 !important;
     }
 
+    /* 「8,100」などの巨大数値を圧縮 */
+    #battle-animation-overlay .text-5xl,
+    #battle-animation-overlay .text-6xl,
+    .battle-animation-modal .text-5xl,
+    .battle-animation-modal .text-6xl {
+        font-size: 2.0rem !important;
+        line-height: 1.0 !important;
+    }
+
+    /* 上下余白（Padding / Margin）を大幅カット */
+    #battle-animation-overlay .py-3,
+    #battle-animation-overlay .py-4,
+    #battle-animation-overlay .my-3,
+    #battle-animation-overlay .my-4,
     .battle-animation-modal .py-3,
     .battle-animation-modal .py-4 {
-        padding-top: 0.25rem !important;
-        padding-bottom: 0.25rem !important;
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
+        margin-top: 2px !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* 最下部（味方ATK/DEF枠）を押し上げて画面内に100%固定 */
+    #battle-animation-overlay > div:last-child,
+    .battle-animation-modal > div:last-child {
+        margin-bottom: 6px !important;
+        flex-shrink: 0 !important;
     }
 }
 
-} /* ★ ここに移動して @media 全体を閉じる */
+} /* ★ sp_battle.css 全体の @media (max-width: 767px) を閉じる括弧 */
