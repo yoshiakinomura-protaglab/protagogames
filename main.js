@@ -119,11 +119,14 @@ async function initGame() {
     const loadedData = await gameModules.loadGameDataFromCSV();
 
     if (loadedData && loadedData.cardsDb && loadedData.cardsDb.length > 0) {
-        gameState.allCards = loadedData.cardsDb;
+        // ★ 主人公カード（c97000〜c97003）のみカスタマイズ値（有名度・手・タグ）を反映
+        gameState.allCards = loadedData.cardsDb.map(c => 
+            typeof applyHeroCustomToJokerCard === 'function' ? applyHeroCustomToJokerCard(c) : c
+        );
         gameState.tagMaster = loadedData.tagMaster || {};
         gameState.cpuDecks = loadedData.cpuDecks || [];
         gameState.jokerResults = loadedData.jokerResults || [];
-        gameState.bgmMaster = loadedData.bgmMaster || []; // ★ 追加
+        gameState.bgmMaster = loadedData.bgmMaster || [];
         
         // 1. タイトル画面で選択した対戦設定を localStorage から取得
         const savedConfig = localStorage.getItem('selectedBattleConfig');

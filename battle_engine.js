@@ -13,6 +13,58 @@ const CATEGORY_CONFIG = {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * 主人公(JOKER)カードに対して heroData のカスタマイズを動的適用する
+ */
+/**
+ * 主人公カード（c97000〜c97003）を対象に、
+ * heroData のパラメータ（名前・有名度・じゃんけん手・装着タグ）を動的上書きする関数
+ * ※ 画像（imageIllust / imageReal）は cards.csv の設定をそのまま参照します
+ */
+function applyHeroCustomToJokerCard(card) {
+    if (!card || !card.id) return card;
+
+    // 1. JOKER判定（一般カードは除外）
+    const r = String(card.rank || '').toUpperCase();
+    if (r !== 'JOKER' && r !== 'JK') return card;
+
+    // 2. 主人公カードID判定（指定の4枚以外は除外）
+    const PROTAGONIST_IDS = ['c97000', 'c97001', 'c97002', 'c97003'];
+    const cardIdStr = String(card.id).trim();
+    if (!PROTAGONIST_IDS.includes(cardIdStr)) {
+        return card;
+    }
+
+    // hero_manager.js 経由で設定データを取得
+    const hero = typeof getHeroData === 'function' 
+        ? getHeroData() 
+        : { name: '主人公', janken: 'gu', equippedTags: ['大和の縁'] };
+    
+    const famousLevel = typeof getHeroFamousLevel === 'function' 
+        ? getHeroFamousLevel() 
+        : 30;
+
+    const updatedCard = { ...card };
+
+    // ① 名前を入力値で動的上書き（未設定時は CSV 本来の名前を保持）
+    updatedCard.name = hero.name || card.name;
+
+    // ② 有名度（Power）を動的上書き
+    updatedCard.power = famousLevel;
+
+    // ③ 得意なじゃんけん手を動的上書き
+    updatedCard.janken = hero.janken || 'gu';
+
+    // ④ 装着特性タグを動的上書き（「大和の縁」＋ カスタム枠）
+    const activeTags = (hero.equippedTags || ['大和の縁']).filter(Boolean);
+    updatedCard.tags = activeTags;
+    updatedCard.tag = activeTags.join(',');
+
+    // ※ 画像（imageIllust / imageReal）は上書きせず CSV の値をそのまま採用
+
+    return updatedCard;
+}
+
 function getPokerHandInfo(cards) {
     if (!cards || cards.length !== 3) {
         return { name: '役なし', multiplier: 1.0 };
@@ -105,15 +157,44 @@ function evaluateSideStatus(cards, tagMaster) {
     const pokerInfo = getPokerHandInfo(cards);
 
     const tagCounts = {};
+    let hasYamatoEdge = false;
+
+    // 1. 元のパースロジックを完璧に保持（配列・文字列・オブジェクト全対応）
     cards.forEach(c => {
+        if (!c) return;
+        
+        let tagArray = [];
         if (Array.isArray(c.tags)) {
-            c.tags.forEach(t => {
-                const rawName = (typeof t === 'object' ? (t.name || t.label) : String(t)).replace(/[\(（].*?[\)）]/, '').trim();
-                if (rawName) tagCounts[rawName] = (tagCounts[rawName] || 0) + 1;
-            });
+            tagArray = c.tags;
+        } else if (typeof c.tags === 'string') {
+            tagArray = c.tags.split(',');
+        } else if (typeof c.tag === 'string') {
+            tagArray = c.tag.split(',');
         }
+
+        tagArray.forEach(t => {
+            const rawName = (typeof t === 'object' ? (t.name || t.label) : String(t)).replace(/[\(（].*?[\)）]/, '').trim();
+            if (rawName) {
+                tagCounts[rawName] = (tagCounts[rawName] || 0) + 1;
+                if (rawName === '大和の縁') {
+                    hasYamatoEdge = true;
+                }
+            }
+        });
     });
 
+    // 2. 「大和の縁」ワイルドカード加算処理（元のカウント集計直後に割り込み）
+    if (hasYamatoEdge && tagMaster) {
+        Object.keys(tagCounts).forEach(tagName => {
+            // タグマスタを参照し、時代(GEN)カテゴリのタグであればカウントを+1
+            const master = tagMaster[tagName];
+            if (master && master.category === 'GEN' && tagCounts[tagName] > 0) {
+                tagCounts[tagName] += 1;
+            }
+        });
+    }
+
+    // 3. 元の倍率計算・カテゴリ振分けロジック（そのまま完全保持）
     let genSupMult = 1.0;
     let atkMult = 1.0;
     let defMult = 1.0;
@@ -159,6 +240,10 @@ function evaluateSideStatus(cards, tagMaster) {
 }
 
 function calculateBattleResult(playerCards, cpuCards, tagMaster) {
+    // ★ 計算直前に自軍・敵軍の JOKER カード（主人公）へカスタマイズ値を動的適用
+    const updatedPlayerCards = playerCards.map(c => applyHeroCustomToJokerCard(c));
+    const updatedCpuCards = cpuCards.map(c => applyHeroCustomToJokerCard(c));
+    
     const playerStat = evaluateSideStatus(playerCards, tagMaster);
     const cpuStat = evaluateSideStatus(cpuCards, tagMaster);
 

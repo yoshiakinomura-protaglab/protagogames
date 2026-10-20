@@ -350,6 +350,27 @@
         }
 
         // ==========================================
+        // ★ 主人公カード パラメータ・名前動的適用関数
+        // ==========================================
+        function applyHeroCustomToJokerCard(card) {
+            if (!card || !card.id) return card;
+            const r = String(card.rank || '').toUpperCase();
+            if (r !== 'JOKER' && r !== 'JK') return card;
+
+            const PROTAGONIST_IDS = ['c97000', 'c97001', 'c97002', 'c97003'];
+            if (!PROTAGONIST_IDS.includes(String(card.id).trim())) return card;
+
+            const hero = typeof getHeroData === 'function' 
+                ? getHeroData() 
+                : { name: '主人公', janken: 'gu', equippedTags: ['大和の縁'] };
+
+            const updatedCard = { ...card };
+            // カスタム名を反映（未設定時は CSV の名前）
+            updatedCard.name = hero.name || card.name;
+            return updatedCard;
+        }
+
+        // ==========================================
         // 3. CSVロード ＆ 裏面タイミング（2秒時点）での切替
         // ==========================================
         async function initTitleData() {
@@ -772,9 +793,16 @@
 
             document.getElementById('vs-player-deck-name').innerText = selectedPlayerDeck.name;
 
-            const playerJokerName = (selectedPlayerDeck && selectedPlayerDeck.jokerId)
-                ? (loadedCards.find(c => String(c.id) === String(selectedPlayerDeck.jokerId))?.name || '---')
-                : '---';
+            // ★ カスタマイズ関数を通したカード情報から名前を取得
+            let playerJokerName = '---';
+            if (selectedPlayerDeck && selectedPlayerDeck.jokerId) {
+                const rawJokerCard = loadedCards.find(c => String(c.id) === String(selectedPlayerDeck.jokerId));
+                if (rawJokerCard) {
+                    const customJoker = applyHeroCustomToJokerCard(rawJokerCard);
+                    playerJokerName = customJoker.name || '---';
+                }
+            }
+
             const jokerNameEl = document.getElementById('vs-player-joker-name');
             if (jokerNameEl) jokerNameEl.innerText = `総大将: ${playerJokerName}`;
 
@@ -1029,6 +1057,23 @@
         </div>
     </div>
 
-</body>
+<!-- =================================================== -->
+<!-- 主人公・所持データ管理 & 設定UIスクリプト -->
+<!-- =================================================== -->
+<!-- ① データ＆セーブ管理コア -->
+<script src="hero_manager.js"></script>
 
+<!-- ② CSVからの解放判定ロジック -->
+<script src="tag_unlock_rules.js"></script>
+
+<!-- ③ 主人公カスタマイズUI（※これを追加！） -->
+<script src="hero_ui.js"></script>
+
+<!-- ④ ⚙️ 設定UI -->
+<script src="settings_ui.js"></script>
+
+<!-- ⑤ 🛠️ デバッグツール -->
+<script src="debug_tool.js"></script>
+
+</body>
 </html>

@@ -32,12 +32,67 @@ let tempModalTagFilters = new Set();
 // ==========================================
 // 1. 初期化 ＆ データロード
 // ==========================================
+/**
+ * 主人公カード（c97000〜c97003）を対象に、
+ * heroData のパラメータ（名前・有名度・じゃんけん手・装着タグ）を動的上書きする関数
+ * ※ 画像（imageIllust / imageReal）は cards.csv の設定をそのまま参照します
+ */
+/**
+ * 主人公カード（c97000〜c97003）を対象に、
+ * heroData のパラメータ（名前・有名度・じゃんけん手・装着タグ）を動的上書きする関数
+ * ※ 画像（imageIllust / imageReal）は cards.csv の設定をそのまま参照します
+ */
+function applyHeroCustomToJokerCard(card) {
+    if (!card || !card.id) return card;
+
+    // 1. JOKER判定（一般カードは除外）
+    const r = String(card.rank || '').toUpperCase();
+    if (r !== 'JOKER' && r !== 'JK') return card;
+
+    // 2. 主人公カードID判定（指定の4枚以外は除外）
+    const PROTAGONIST_IDS = ['c97000', 'c97001', 'c97002', 'c97003'];
+    const cardIdStr = String(card.id).trim();
+    if (!PROTAGONIST_IDS.includes(cardIdStr)) {
+        return card;
+    }
+
+    // hero_manager.js 経由で設定データを取得
+    const hero = typeof getHeroData === 'function' 
+        ? getHeroData() 
+        : { name: '主人公', janken: 'gu', equippedTags: ['大和の縁'] };
+    
+    const famousLevel = typeof getHeroFamousLevel === 'function' 
+        ? getHeroFamousLevel() 
+        : 30;
+
+    const updatedCard = { ...card };
+
+    // ① 名前を入力値で動的上書き（未設定時は CSV 本来の名前を保持）
+    updatedCard.name = hero.name || card.name;
+
+    // ② 有名度（Power）を動的上書き
+    updatedCard.power = famousLevel;
+
+    // ③ 得意なじゃんけん手を動的上書き
+    updatedCard.janken = hero.janken || 'gu';
+
+    // ④ 装着特性タグを動的上書き（「大和の縁」＋ カスタム枠）
+    const activeTags = (hero.equippedTags || ['大和の縁']).filter(Boolean);
+    updatedCard.tags = activeTags;
+    updatedCard.tag = activeTags.join(',');
+
+    // ※ 画像（imageIllust / imageReal）は上書きせず CSV の値をそのまま採用
+
+    return updatedCard;
+}
+
 async function initDeckEditor() {
     try {
         // ★ データを確実に待機して取得
         const gameData = await loadGameDataFromCSV();
         if (gameData && gameData.cardsDb && gameData.cardsDb.length > 0) {
-            allCards = gameData.cardsDb;
+            // ★ JOKERカードへ主人公カスタマイズ値を適用して保持
+            allCards = gameData.cardsDb.map(c => applyHeroCustomToJokerCard(c));
         } else {
             console.warn("cardsDb が空です");
         }
