@@ -39,13 +39,12 @@ function getUserCollection() {
 /**
  * 初期コレクション生成（cards.csvのID形式に対応）
  */
+/**
+ * 初期所持コレクションの初期化
+ * ※ プロローグ前は0枚（プロローグ完了時に20枚付与されます）
+ */
 function initDefaultCollection() {
     const defaultCol = {};
-    // 旧データ（数値ID）を消去してcards.csvの先頭20枚（c00000〜c00019）を初期所持にする
-    for (let i = 0; i < 20; i++) {
-        const padId = 'c' + String(i).padStart(5, '0');
-        defaultCol[padId] = 1;
-    }
     saveUserCollection(defaultCol);
     return defaultCol;
 }
@@ -65,9 +64,161 @@ function addCardToCollection(cardId, count = 1) {
     return collection;
 }
 
+/**
+ * 特定のカードIDの所持枚数を取得（※ c90000番台も含めて実際の所持数を返す）
+ */
+function getCardCount(cardId) {
+    const collection = getUserCollection();
+    const idStr = String(cardId).trim().toLowerCase();
+    
+    if (collection[idStr] !== undefined) {
+        return Number(collection[idStr] || 0);
+    }
+    
+    // 大文字小文字の表記ブレ（c97100 vs C97100）をケア
+    const foundKey = Object.keys(collection).find(k => k.toLowerCase() === idStr);
+    return foundKey ? Number(collection[foundKey] || 0) : 0;
+}
+
+/**
+ * 特定のカードを所持しているか判定
+ */
+function isCardOwned(cardId) {
+    return getCardCount(cardId) > 0;
+}
+
+/**
+ * 特定のカードIDの所持枚数を取得（※ c90000番台も含めて実際の所持数を返す）
+ */
+function getCardCount(cardId) {
+    const collection = getUserCollection();
+    const idStr = String(cardId).trim().toLowerCase();
+    
+    if (collection[idStr] !== undefined) {
+        return Number(collection[idStr] || 0);
+    }
+    
+    // 大文字小文字の表記ブレ（c97100 vs C97100）をケア
+    const foundKey = Object.keys(collection).find(k => k.toLowerCase() === idStr);
+    return foundKey ? Number(collection[foundKey] || 0) : 0;
+}
+
+/**
+ * 特定のカードを所持しているか判定
+ */
+function isCardOwned(cardId) {
+    return getCardCount(cardId) > 0;
+}
+
+/**
+ * 特定のカードIDの所持枚数を取得（※ c90000番台も含めて実際の所持数を返す）
+ */
+function getCardCount(cardId) {
+    const collection = getUserCollection();
+    const idStr = String(cardId).trim().toLowerCase();
+    
+    if (collection[idStr] !== undefined) {
+        return Number(collection[idStr] || 0);
+    }
+    
+    // 大文字小文字の表記ブレ（c97100 vs C97100）をケア
+    const foundKey = Object.keys(collection).find(k => k.toLowerCase() === idStr);
+    return foundKey ? Number(collection[foundKey] || 0) : 0;
+}
+
+/**
+ * 特定のカードを所持しているか判定
+ */
+function isCardOwned(cardId) {
+    return getCardCount(cardId) > 0;
+}
+
+/**
+ * 特定のカードIDの所持枚数を取得（※ c90000番台も含めて実際の所持数を返す）
+ */
+function getCardCount(cardId) {
+    const collection = getUserCollection();
+    const idStr = String(cardId).trim().toLowerCase();
+    
+    if (collection[idStr] !== undefined) {
+        return Number(collection[idStr] || 0);
+    }
+    
+    // 大文字小文字の表記ブレ（c97100 vs C97100）をケア
+    const foundKey = Object.keys(collection).find(k => k.toLowerCase() === idStr);
+    return foundKey ? Number(collection[foundKey] || 0) : 0;
+}
+
+/**
+ * 特定のカードを所持しているか判定
+ */
+function isCardOwned(cardId) {
+    return getCardCount(cardId) > 0;
+}
+
+/**
+ * 特定のカードIDの所持枚数を取得（※ c90000番台も含めて実際の所持数を返す）
+ */
+function getCardCount(cardId) {
+    const collection = getUserCollection();
+    const idStr = String(cardId).trim().toLowerCase();
+    
+    if (collection[idStr] !== undefined) {
+        return Number(collection[idStr] || 0);
+    }
+    
+    // 大文字小文字の表記ブレ（c97100 vs C97100）をケア
+    const foundKey = Object.keys(collection).find(k => k.toLowerCase() === idStr);
+    return foundKey ? Number(collection[foundKey] || 0) : 0;
+}
+
+/**
+ * 特定のカードを所持しているか判定
+ */
+function isCardOwned(cardId) {
+    return getCardCount(cardId) > 0;
+}
+
+/**
+ * 特定のカードIDの所持枚数を取得（※ c90000番台も含めて実際の所持数を返す）
+ */
+function getCardCount(cardId) {
+    const collection = getUserCollection();
+    const idStr = String(cardId).trim().toLowerCase();
+    
+    if (collection[idStr] !== undefined) {
+        return Number(collection[idStr] || 0);
+    }
+    
+    // 大文字小文字の表記ブレ（c97100 vs C97100）をケア
+    const foundKey = Object.keys(collection).find(k => k.toLowerCase() === idStr);
+    return foundKey ? Number(collection[foundKey] || 0) : 0;
+}
+
+/**
+ * 特定のカードを所持しているか判定
+ */
+function isCardOwned(cardId) {
+    return getCardCount(cardId) > 0;
+}
+
+/**
+ * 総所持枚数を取得（※ 有名度・実績計算用。c90000以降は実績カウントから除外）
+ */
 function getTotalCardCount() {
     const collection = getUserCollection();
-    return Object.values(collection).reduce((sum, num) => sum + Number(num), 0);
+    let total = 0;
+
+    Object.entries(collection).forEach(([idStr, count]) => {
+        const idNum = parseInt(String(idStr).replace(/^c/i, ''), 10);
+
+        // c90000 未満（一般カード）のみを総集枚数（実績）にカウント
+        if (isNaN(idNum) || idNum < 90000) {
+            total += Number(count || 0);
+        }
+    });
+
+    return total;
 }
 
 function getHeroFamousLevel() {

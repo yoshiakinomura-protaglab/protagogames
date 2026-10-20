@@ -280,21 +280,6 @@
         </div>
     </div>
 
-    <!-- JSモジュール（ポータブル安全読み込み） -->
-    <script>
-        (async () => {
-            try {
-                const res = await fetch('./deck_edit.js');
-                const jsText = await res.text();
-                const blob = new Blob([jsText], { type: 'application/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                await import(blobUrl);
-            } catch (e) {
-                console.error("deck_edit.js のロードに失敗:", e);
-            }
-        })();
-    </script>
- 
     <!-- Modal 4: 特性チェック Modal -->
     <div id="modal-traits-check" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
         <div class="bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 max-w-md w-11/12 shadow-2xl relative flex flex-col max-h-[85vh]">
@@ -351,11 +336,14 @@
     <!-- ① 主人公データ＆セーブ管理コア（先に読み込む） -->
     <script src="hero_manager.js"></script>
 
-    <!-- ② JSモジュール（ポータブル安全読み込み） -->
+    <!-- ② ストーリー専用データ管理（必要に応じて） -->
+    <script src="story_manager.js"></script>
+
+    <!-- ③ デッキ編集スクリプト（hero_manager読み込み後にインポート） -->
     <script>
         (async () => {
             try {
-                const res = await fetch('./deck_edit.js');
+                const res = await fetch(`./deck_edit.js?v=${Date.now()}`);
                 const jsText = await res.text();
                 const blob = new Blob([jsText], { type: 'application/javascript' });
                 const blobUrl = URL.createObjectURL(blob);
@@ -365,6 +353,6 @@
             }
         })();
     </script>
-    
+        
 </body>
 </html>

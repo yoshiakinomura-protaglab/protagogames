@@ -293,6 +293,21 @@
         // ==========================================
         const menuItems = [
             {
+                id: 'btn-story-mode',
+                title: 'ストーリーモード',
+                icon: 'fa-scroll',
+                badge: '序章',
+                enabled: true,
+                onClick: () => {
+                    if (typeof openStoryMode === 'function') {
+                        openStoryMode();
+                    } else {
+                        alert("ストーリーモード読み込み中...");
+                    }
+                }
+            },    
+        
+            {
                 id: 'btn-free-battle',
                 title: 'フリーバトル',
                 icon: 'fa-swords',
@@ -1063,6 +1078,10 @@
 <!-- ① データ＆セーブ管理コア -->
 <script src="hero_manager.js"></script>
 
+<!-- ★ 追加：ストーリー専用データ管理 ＆ UI -->
+<script src="story_manager.js"></script>
+<script src="story_ui.js"></script>
+
 <!-- ② CSVからの解放判定ロジック -->
 <script src="tag_unlock_rules.js"></script>
 
@@ -1074,6 +1093,8 @@
 
 <!-- ⑤ 🛠️ デバッグツール -->
 <script src="debug_tool.js"></script>
+
+
 
 </body>
 </html>

@@ -370,6 +370,7 @@ function renderSelectedSlots() {
 }
 
 // 画面下部：カード一覧描画（JOKER別枠固定表示 ＆ 赤枠編成中対応）
+// 画面下部：カード一覧描画（JOKER別枠固定表示 ＆ 赤枠編成中対応）
 function renderCollectionGrid() {
     const jokerContainer = document.getElementById('joker-collection-grid');
     const normalContainer = document.getElementById('normal-collection-grid');
@@ -377,8 +378,25 @@ function renderCollectionGrid() {
     
     if (!jokerContainer || !normalContainer) return;
 
-    // 1. 現在のフィルター条件に合うカードを抽出（AND検索対応）
+    // 1. 現在のフィルター条件に合うカードを抽出（所持枚数1枚以上 ＆ AND検索対応）
     let filtered = allCards.filter(c => {
+        if (!c) return false;
+
+        // ★ カードIDを文字列に統一（数値・文字列の両対応）
+        const cardIdStr = String(c.id || '').trim().toLowerCase();
+        
+        let ownedCount = 0;
+        if (typeof getCardCount === 'function') {
+            ownedCount = getCardCount(cardIdStr);
+        } else if (typeof getUserCollection === 'function') {
+            const col = getUserCollection();
+            ownedCount = Number(col[cardIdStr] || col[c.id] || 0);
+        }
+
+        // 0枚（未所持）はカード一覧から除外
+        if (ownedCount <= 0) return false;
+
+        // タグフィルターチェック
         const cardTags = String(c.tags || c.tag || '').split(',').map(t => t.trim());
         if (selectedTagFilters.size > 0) {
             for (let requiredTag of selectedTagFilters) {
@@ -388,21 +406,22 @@ function renderCollectionGrid() {
         return true;
     });
 
+    console.log(`🎴 [DeckEdit] 所持フィルター後の表示可能枚数: ${filtered.length}枚`, filtered);
+
     if (countEl) countEl.innerText = `${filtered.length}枚表示`;
 
     // 右メニュー内の適用中タグ表示を更新
     updateActiveTagFilterUI();
 
     // 2. JOKERカードと一般カードに分類
-    const jokerCards = filtered.filter(c => String(c.rank).toUpperCase() === 'JOKER');
-    const normalCards = filtered.filter(c => String(c.rank).toUpperCase() !== 'JOKER');
+    const jokerCards = filtered.filter(c => String(c.rank).toUpperCase() === 'JOKER' || String(c.rank).toUpperCase() === 'JK');
+    const normalCards = filtered.filter(c => String(c.rank).toUpperCase() !== 'JOKER' && String(c.rank).toUpperCase() !== 'JK');
 
-    // --- ① JOKER一覧の描画（選択中は「赤枠＋編成中バッジ」） ---
+    // --- ① JOKER一覧の描画 ---
     jokerContainer.innerHTML = jokerCards.map(card => {
-        const isJoker = String(currentEditingDeck.jokerId) === String(card.id);
+        const isJoker = String(currentEditingDeck.jokerId).toLowerCase() === String(card.id).toLowerCase();
         const img = (displayMode === 'real' ? card.imageReal : card.imageIllust) || `${card.id}_illust.jpg`;
 
-        // JOKER専用の赤枠スタイルと赤背景の「編成中」バッジ
         let cardStyle = 'border-slate-800/80 brightness-50 opacity-60 grayscale-[30%] hover:brightness-90 hover:opacity-90';
         let badgeHtml = '';
 
@@ -425,9 +444,10 @@ function renderCollectionGrid() {
         `;
     }).join('');
 
-    // --- ② 一般カード一覧の描画（選択中は「金枠＋編成中バッジ」） ---
+    // --- ② 一般カード一覧の描画 ---
     normalContainer.innerHTML = normalCards.map(card => {
-        const isNormal = currentEditingDeck.cardIds.map(String).includes(String(card.id));
+        const currentIds = (currentEditingDeck.cardIds || []).map(id => String(id).toLowerCase());
+        const isNormal = currentIds.includes(String(card.id).toLowerCase());
         const img = (displayMode === 'real' ? card.imageReal : card.imageIllust) || `${card.id}_illust.jpg`;
 
         let cardStyle = 'border-slate-800/80 brightness-50 opacity-60 grayscale-[30%] hover:brightness-90 hover:opacity-90';
