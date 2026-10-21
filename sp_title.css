@@ -1,6 +1,6 @@
 /**
  * sp_title.css - タイトル画面専用 スマホ縦持ちレイアウト補正 CSS
- * （カードの位置CSSは一切触らず、ボタンの位置のみをカードに合わせる完全安全版）
+ * （元の完璧なロゴ・カード位置を完全保持し、アイコンサイズのみ最適化）
  */
 
 @media (max-width: 767px) {
@@ -37,10 +37,10 @@
         border-radius: 8px !important;
     }
 
-    /* --- 3. 画面中央：円形ロゴ（1.2倍拡大 ＆ 完全中央配置） --- */
+    /* --- 3. 画面中央：円形ロゴ（元の完璧な配置を完全保持） --- */
     #title-screen-component > div.relative.z-10.flex.flex-col {
         position: absolute !important;
-        top: 38% !important;
+        top: 35% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) !important;
         margin: 0 !important;
@@ -59,13 +59,13 @@
         flex-shrink: 0 !important;
     }
 
-    /* --- 4. 下段左側：メニューボタン群（カードの描画位置に合わせて位置設定） --- */
+    /* --- 4. ★ 下段左側：2列×3行 正方形アイコン群（サイズのみ最適化） --- */
     #title-screen-component .w-\[380px\] {
         position: absolute !important;
-        left: 10px !important;
-        bottom: -8% !important;          /* ★ この値をカードの底辺に合わせて微調整 */
-        width: 58% !important;
-        max-width: 58% !important;
+        left: 50px !important;
+        bottom: -10% !important; /* 底辺を回転カードの下辺ラインに自然に合わせる */
+        width: 44% !important;  /* 58% -> 44% に絞ることでアイコンが2周りコンパクト化 */
+        max-width: 170px !important;
         margin: 0 !important;
         z-index: 30 !important;
     }
@@ -73,44 +73,15 @@
     #title-menu-container {
         width: 100% !important;
         max-width: 100% !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 8px !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 6px !important;
     }
 
-    /* 不要バッジの非表示 */
-    #title-menu-container button > span.text-\[10px\],
-    #title-menu-container button span.text-\[10px\] {
-        display: none !important;
-    }
-
-    /* ボタン本体（高さ44px統一） */
-    #title-menu-container button {
-        padding: 10px 12px !important;
-        min-height: 44px !important;
-        border-radius: 10px !important;
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-        gap: 8px !important;
-        width: 85% !important;
-        box-sizing: border-box !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.6) !important;
-    }
-
-    #title-menu-container button i {
-        font-size: 13px !important;
-    }
-
-    /* --- 5. ★ 下段右側：3Dカード（カード位置のCSS指定は全撤去。自然な高さで回転させる） --- */
-    /* 3Dカードの親コンテナや位置プロパティの変更は一切行いません */
-
-    /* --- 5. 下段右側：3Dカード（サイズのみスマホ用に小さく縮小） --- */
+    /* --- 5. ★ 下段右側：3Dカード（元の位置・サイズ設定を完全保持） --- */
     #title-screen-component .perspective-1000 {
-        width: 117px !important;           /* ★ カードの横幅（小さく調整：お好みで70px〜85pxに変更可） */
-        height: 156px !important;         /* ★ 縦4:横3 比率（78px * 4 / 3 = 104px） */
+        width: 117px !important;
+        height: 156px !important;
         aspect-ratio: 3 / 4 !important;
     }
 

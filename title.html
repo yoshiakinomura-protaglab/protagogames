@@ -291,13 +291,51 @@
         // ==========================================
         // 2. メニュー生成
         // ==========================================
+        // ★ ご指定の6つのパネル定義（PC・スマホ順序対応）
         const menuItems = [
             {
+                id: 'btn-free-battle',
+                title: '演習',
+                image: 'images/free_battle_icon.jpg',
+                pcOrder: 'md:order-2',  // PC: 上段中央
+                spOrder: 'order-1',     // スマホ: 1行目左
+                onClick: () => {
+                    playBeforePvPBGM();
+                    renderOpponentModal();
+                    document.getElementById('opponent-select-modal')?.classList.remove('hidden');
+                }
+            },
+            {
+                id: 'btn-p2p-battle',
+                title: '対戦',
+                image: 'images/p2p_icon.jpg',
+                pcOrder: 'md:order-3',  // PC: 上段右
+                spOrder: 'order-2',     // スマホ: 1行目右
+                onClick: () => {
+                    playBeforePvPBGM();
+                    setTimeout(() => { window.location.href = 'p2p_room.html'; }, 100);
+                }
+            },
+            {
+                id: 'btn-gacha-mode',
+                title: '御籤',
+                image: 'images/gacha_icon.jpg',
+                pcOrder: 'md:order-6',  // PC: 下段右
+                spOrder: 'order-3',     // スマホ: 2行目左
+                onClick: () => {
+                    if (typeof openGachaSelectModal === 'function') {
+                        openGachaSelectModal();
+                    } else {
+                        alert("ガチャ機能読み込み中...");
+                    }
+                }
+            },
+            {
                 id: 'btn-story-mode',
-                title: 'ストーリーモード',
-                icon: 'fa-scroll',
-                badge: '序章',
-                enabled: true,
+                title: '絵巻',
+                image: 'images/story_icon.jpg',
+                pcOrder: 'md:order-1',  // PC: 上段左
+                spOrder: 'order-4',     // スマホ: 2行目右
                 onClick: () => {
                     if (typeof openStoryMode === 'function') {
                         openStoryMode();
@@ -305,39 +343,28 @@
                         alert("ストーリーモード読み込み中...");
                     }
                 }
-            },    
-        
+            },
             {
-                id: 'btn-free-battle',
-                title: 'フリーバトル',
-                icon: 'fa-swords',
-                badge: 'コインGET',
-                enabled: true,
+                id: 'btn-hero-custom',
+                title: '現身',
+                image: 'images/protagonist_icon.jpg',
+                pcOrder: 'md:order-4',  // PC: 下段左
+                spOrder: 'order-5',     // スマホ: 3行目左
                 onClick: () => {
-                    playBeforePvPBGM(); // ★ 戦闘準備曲再生
-                    renderOpponentModal();
-                    document.getElementById('opponent-select-modal')?.classList.remove('hidden');
+                    // ★ hero_ui.js のモーダル起動関数を直接呼び出し
+                    if (typeof openHeroModal === 'function') {
+                        openHeroModal();
+                    } else {
+                        alert("主人公カスタム画面の読み込みに失敗しました。");
+                    }
                 }
             },
             {
-                id: 'btn-p2p-battle',
-                title: '対戦 (P2P)',
-                icon: 'fa-wifi',
-                badge: '通信対戦',
-                enabled: true,
-                onClick: () => {
-                    playBeforePvPBGM(); // ★ 戦闘準備曲再生
-                    setTimeout(() => {
-                        window.location.href = 'p2p_room.html';
-                    }, 100);
-                }
-            }, 
-            {
                 id: 'btn-deck-edit',
-                title: 'デッキ編集',
-                icon: 'fa-box-archive',
-                badge: '10枠保存可',
-                enabled: true,
+                title: '編集',
+                image: 'images/deck_icon.jpg',
+                pcOrder: 'md:order-5',  // PC: 下段中央
+                spOrder: 'order-6',     // スマホ: 3行目右
                 onClick: () => {
                     window.location.href = 'deck_edit.html';
                 }
@@ -345,17 +372,16 @@
         ];
         
         function renderTitleMenu() {
-            const container = document.getElementById('title-menu-container');
-            if (!container) return;
+    const container = document.getElementById('title-menu-container');
+    if (!container) return;
+
+    // ★ 最大幅を二回り小さく（360px）設定
+    container.className = "grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 w-full max-w-[240px] sm:max-w-[360px]";
 
             container.innerHTML = menuItems.map(item => `
-                <button id="${item.id}" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 font-black text-sm sm:text-base shadow-xl shadow-amber-950/60 border border-amber-300 hover:scale-105 active:scale-95 transition-all text-left flex items-center justify-between cursor-pointer">
-                    <span class="flex items-center gap-2.5">
-                        <i class="fa-solid ${item.icon} text-lg"></i>
-                        <span>${item.title}</span>
-                    </span>
-                    ${item.badge ? `<span class="text-[10px] bg-slate-950/20 px-2 py-0.5 rounded font-normal">${item.badge}</span>` : ''}
-                </button>
+                <div id="${item.id}" class="relative w-full aspect-square rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/40 hover:border-amber-400 shadow-xl cursor-pointer hover:scale-[1.03] active:scale-95 transition-all duration-200 bg-slate-950 ${item.spOrder} ${item.pcOrder}">
+                    <img src="${item.image}" alt="${item.title}" class="w-full h-full object-cover">
+                </div>
             `).join('');
 
             menuItems.forEach(item => {
@@ -1077,6 +1103,9 @@
 <!-- =================================================== -->
 <!-- ① データ＆セーブ管理コア -->
 <script src="hero_manager.js"></script>
+
+<!-- ★ 追加：ガチャ管理システム -->
+<script src="gacha_manager.js"></script>
 
 <!-- ★ 追加：ストーリー専用データ管理 ＆ UI -->
 <script src="story_manager.js"></script>

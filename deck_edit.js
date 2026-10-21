@@ -280,6 +280,14 @@ function loadDeckFromStorage(deckSlotId) {
     
     currentEditingDeck = { ...loaded };
 
+    // ★ 主人公カードが編成中の場合、現在の性別（男性: c97001 / 女性: c97003）に合わせて自動同期
+    const PROTAGONIST_IDS = ['c97000', 'c97001', 'c97002', 'c97003'];
+    if (currentEditingDeck.jokerId && PROTAGONIST_IDS.includes(String(currentEditingDeck.jokerId).toLowerCase())) {
+        const hero = typeof getHeroData === 'function' ? getHeroData() : { gender: 'male' };
+        const targetHeroId = (hero.gender === 'female' || hero.gender === 'woman') ? 'c97003' : 'c97001';
+        currentEditingDeck.jokerId = targetHeroId; // 自動差し替え
+    }
+
     const inputName = document.getElementById('deck-name-input');
     if (inputName) inputName.value = currentEditingDeck.name;
 
@@ -370,7 +378,6 @@ function renderSelectedSlots() {
 }
 
 // 画面下部：カード一覧描画（JOKER別枠固定表示 ＆ 赤枠編成中対応）
-// 画面下部：カード一覧描画（JOKER別枠固定表示 ＆ 赤枠編成中対応）
 function renderCollectionGrid() {
     const jokerContainer = document.getElementById('joker-collection-grid');
     const normalContainer = document.getElementById('normal-collection-grid');
@@ -379,22 +386,31 @@ function renderCollectionGrid() {
     if (!jokerContainer || !normalContainer) return;
 
     // 1. 現在のフィルター条件に合うカードを抽出（所持枚数1枚以上 ＆ AND検索対応）
+    // ★ 性別の判定と対象の主人公カードID決定（男性: c97000 / 女性: c97002）
+    const hero = typeof getHeroData === 'function' ? getHeroData() : { gender: 'male' };
+    const targetHeroId = (hero.gender === 'female' || hero.gender === 'woman') ? 'c97003' : 'c97001';
+    const ALL_PROTAGONIST_IDS = ['c97000', 'c97001', 'c97002', 'c97003'];
+
+    // 1. 現在のフィルター条件に合うカードを抽出
     let filtered = allCards.filter(c => {
-        if (!c) return false;
+        if (!c || !c.id) return false;
 
-        // ★ カードIDを文字列に統一（数値・文字列の両対応）
-        const cardIdStr = String(c.id || '').trim().toLowerCase();
-        
-        let ownedCount = 0;
-        if (typeof getCardCount === 'function') {
-            ownedCount = getCardCount(cardIdStr);
-        } else if (typeof getUserCollection === 'function') {
-            const col = getUserCollection();
-            ownedCount = Number(col[cardIdStr] || col[c.id] || 0);
+        const cardIdStr = String(c.id).trim().toLowerCase();
+
+        // ★ 主人公カード群の判定（選択性別以外は除外・選択性別は所持数不問で許可）
+        if (ALL_PROTAGONIST_IDS.includes(cardIdStr)) {
+            if (cardIdStr !== targetHeroId) return false; // 異性主人公は除外
+        } else {
+            // 一般カードは所持数0枚を除外
+            let ownedCount = 0;
+            if (typeof getCardCount === 'function') {
+                ownedCount = getCardCount(cardIdStr);
+            } else if (typeof getUserCollection === 'function') {
+                const col = getUserCollection();
+                ownedCount = Number(col[cardIdStr] || col[c.id] || 0);
+            }
+            if (ownedCount <= 0) return false;
         }
-
-        // 0枚（未所持）はカード一覧から除外
-        if (ownedCount <= 0) return false;
 
         // タグフィルターチェック
         const cardTags = String(c.tags || c.tag || '').split(',').map(t => t.trim());
@@ -416,6 +432,16 @@ function renderCollectionGrid() {
     // 2. JOKERカードと一般カードに分類
     const jokerCards = filtered.filter(c => String(c.rank).toUpperCase() === 'JOKER' || String(c.rank).toUpperCase() === 'JK');
     const normalCards = filtered.filter(c => String(c.rank).toUpperCase() !== 'JOKER' && String(c.rank).toUpperCase() !== 'JK');
+
+    // ★ 主人公カード（targetHeroId）を必ず1番目（一番左）にピン留めソート
+    jokerCards.sort((a, b) => {
+        const idA = String(a.id).toLowerCase();
+        const idB = String(b.id).toLowerCase();
+
+        if (idA === targetHeroId) return -1;
+        if (idB === targetHeroId) return 1;
+        return idA.localeCompare(idB);
+    });
 
     // --- ① JOKER一覧の描画 ---
     jokerContainer.innerHTML = jokerCards.map(card => {

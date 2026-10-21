@@ -97,12 +97,22 @@ function openSettingsModal() {
     });
 
     document.getElementById('btn-reset-data').addEventListener('click', () => {
-        if (confirm("本当にデータを初期化しますか？")) {
+        if (confirm("本当にデータを初期化しますか？\n（ストーリー進捗・所持カード・デッキ設定がすべてクリアされます）")) {
+            // 1. 基本セーブデータの削除
             localStorage.removeItem(STORAGE_KEYS.COLLECTION);
             localStorage.removeItem(STORAGE_KEYS.HERO);
-            initDefaultCollection();
-            alert("初期化しました。");
-            location.reload();
+
+            // ★ 2. ストーリー進捗 ＆ 保存デッキデータの削除（追加）
+            localStorage.removeItem('yamato_story_progress_v1');
+            localStorage.removeItem('yamato_縁_saved_decks_v1');
+
+            if (typeof initDefaultCollection === 'function') {
+                initDefaultCollection();
+            }
+
+            alert("初期化しました。タイトル画面に移動します。");
+            // ★ プロローグ・初期化からやり直せるようタイトルへ遷移
+            window.location.href = 'title.html';
         }
     });
 }
