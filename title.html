@@ -51,11 +51,88 @@
             transform: rotateY(180deg);
         }
     </style>
+
+    <style>
+    /* 典学専用：スマホ版（縦画面）背景 */
+     .quiz-screen-bg {
+        background-image: linear-gradient(rgba(10, 8, 6, 0.72), rgba(10, 8, 6, 0.85)), url('images/quiz_bg_sp.jpg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }
+
+    /* 典学専用：PC版（タブレット横〜PC）背景 */
+    @media (min-width: 768px) {
+        .quiz-screen-bg {
+        background-image: linear-gradient(rgba(10, 8, 6, 0.70), rgba(10, 8, 6, 0.82)), url('images/quiz_bg_pc.jpg');
+        }
+    }
+
+    /* ========================================================= */
+/* 典学タイトル用：じわっと滲み出る幽玄フェード（位置移動なし） */
+/* ========================================================= */
+@keyframes quizDeepFade {
+  0% {
+    opacity: 0;
+    filter: blur(8px) brightness(0.6); /* 最初は暗がりの中でぼやけている */
+    transform: scale(0.97);            /* わずかだけ小さく構える */
+  }
+  60% {
+    filter: blur(2px) brightness(0.9);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px) brightness(1.0);  /* くっきりと結像 */
+    transform: scale(1.0);
+  }
+}
+
+/* サブテキスト用：純粋なフェード（フィルターなし） */
+@keyframes quizPureFade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* 1. 歴史修練場：1.5秒かけて静かに浮かぶ */
+.animate-quiz-fade-1 {
+  opacity: 0;
+  animation: quizPureFade 1.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  animation-delay: 0.3s;
+}
+
+/* 2. 「典学」ロゴ：2.4秒かけて奥からじわ〜っと結像する重厚な出現 */
+.animate-quiz-fade-2 {
+  opacity: 0;
+  animation: quizDeepFade 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.8s; /* サブタイトルのあとに重々しく登場 */
+}
+
+/* 3. 「触れて開始」帯：ロゴが定着した後に静かに浮上 */
+.animate-quiz-fade-3 {
+  opacity: 0;
+  animation: quizPureFade 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  animation-delay: 2.0s;
+}
+
+/* 4. 戻るボタン：最後にそっと表示 */
+.animate-quiz-fade-ui {
+  opacity: 0;
+  animation: quizPureFade 1.2s ease-out forwards;
+  animation-delay: 2.4s;
+}
+
+    </style>
+
+
+
 </head>
 <body class="relative w-screen h-screen overflow-hidden bg-black">
 
-<div id="start-overlay" class="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center cursor-pointer transition-opacity duration-700">
-    <!-- 画像とテキストを保持する親コンテナ -->
+<div id="start-overlay" style="display: none;" class="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center cursor-pointer transition-opacity duration-700">    <!-- 画像とテキストを保持する親コンテナ -->
     <div class="relative flex items-center justify-center w-full max-w-[340px] sm:max-w-[500px] px-4">
         
     <!-- CLICK TO START 用のロゴ画像 -->
@@ -81,29 +158,36 @@
 
             if (bgm) bgm.volume = 0.4; // 音量調整（40%）
 
-            // スタート画面タップ時の処理
-            if (startOverlay) {
+            // ★ 1. すでに一度タップしたか（解放済みフラグ）を確認
+            const isAudioUnlocked = sessionStorage.getItem('yamato_audio_unlocked') === 'true';
+
+            if (isAudioUnlocked) {
+                // ★ 2回目以降（デッキ編集等から戻った時）は画面を非表示のまま維持してBGMのみ再生
+                if (bgm) {
+                    bgm.play().catch(err => console.log("BGM自動再生:", err));
+                }
+            } else if (startOverlay) {
+                // ★ 初回アクセス時のみ：JavaScriptの実行タイミングではじめて表示させる
+                startOverlay.style.display = 'flex';
+
                 startOverlay.addEventListener('click', () => {
-                    // 1. タイトルBGM再生開始
+                    // 解放フラグをセッションに保存
+                    sessionStorage.setItem('yamato_audio_unlocked', 'true');
+
                     if (bgm) {
-                        bgm.play().catch(err => {
-                            console.log("BGM再生ブロックエラー:", err);
-                        });
+                        bgm.play().catch(err => console.log("BGM再生ブロックエラー:", err));
                     }
 
-                    // ★ 2. 戦闘準備BGMの音声再生権限（ブラウザロック）をタップ時に一括解除しておく！
                     try {
                         window.pvpPrepAudio = new Audio('audio/beforepvp.mp3');
                         window.pvpPrepAudio.loop = true;
                         window.pvpPrepAudio.volume = 0.4;
-                        // 一瞬再生して即時ポーズ（再生権限を獲得）
                         window.pvpPrepAudio.play().then(() => {
                             window.pvpPrepAudio.pause();
                             window.pvpPrepAudio.currentTime = 0;
                         }).catch(() => {});
                     } catch(e) {}
 
-                    // 3. 黒背景をフェードアウト
                     startOverlay.classList.add('opacity-0', 'pointer-events-none');
                     
                     setTimeout(() => {
@@ -119,6 +203,14 @@
 <!-- TITLE SCREEN CONTAINER (純黒背景・要素復元版) -->
     <div id="title-screen-component" class="relative z-10 max-w-7xl w-full h-full mx-auto flex flex-col justify-between p-6 sm:p-10 select-none bg-black">
         
+        <!-- ★ 左上：所持勾玉数表示（右上ボタンと高さ・デザイン同期） -->
+        <div class="absolute top-6 left-6 sm:top-10 sm:left-10 z-30 flex items-center">
+            <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-amber-500/50 text-xs sm:text-sm font-bold text-amber-300 shadow-lg shadow-black/50">
+                <i class="fa-solid fa-gem text-amber-400"></i>
+                <span>勾玉: <strong id="title-magatama-count" class="text-yellow-300 font-mono text-xs sm:text-sm">0</strong></span>
+            </div>
+        </div>
+
         <!-- 右上：時代（GEN）フィルター ＆ 画像モード切り替えボタン -->
         <div class="absolute top-6 right-6 sm:top-10 sm:right-10 z-30 flex items-center gap-2">
             <!-- 時代（GEN）選択ドロップダウン -->
@@ -288,17 +380,32 @@
             }
         }
 
-        // ==========================================
+// ==========================================
         // 2. メニュー生成
         // ==========================================
-        // ★ ご指定の6つのパネル定義（PC・スマホ順序対応）
+        // ★ 3列×3段（計9マス / スペーサー含む）のパネル定義
         const menuItems = [
+            // --- 1段目 ---
+            {
+                id: 'btn-quiz-mode',
+                title: '典学',
+                image: 'images/quiz_icon.jpg',
+                pcOrder: 'md:order-1',
+                spOrder: 'order-1',
+                onClick: () => {
+                    if (typeof openQuizModal === 'function') {
+                        openQuizModal();
+                    } else {
+                        alert("典学（クイズ）機能読み込み中...");
+                    }
+                }
+            },
             {
                 id: 'btn-free-battle',
                 title: '演習',
                 image: 'images/free_battle_icon.jpg',
-                pcOrder: 'md:order-2',  // PC: 上段中央
-                spOrder: 'order-1',     // スマホ: 1行目左
+                pcOrder: 'md:order-2',
+                spOrder: 'order-2',
                 onClick: () => {
                     playBeforePvPBGM();
                     renderOpponentModal();
@@ -309,33 +416,31 @@
                 id: 'btn-p2p-battle',
                 title: '対戦',
                 image: 'images/p2p_icon.jpg',
-                pcOrder: 'md:order-3',  // PC: 上段右
-                spOrder: 'order-2',     // スマホ: 1行目右
+                pcOrder: 'md:order-3',
+                spOrder: 'order-3',
                 onClick: () => {
                     playBeforePvPBGM();
                     setTimeout(() => { window.location.href = 'p2p_room.html'; }, 100);
                 }
             },
+
+// --- 2段目 ---
             {
-                id: 'btn-gacha-mode',
-                title: '御籤',
-                image: 'images/gacha_icon.jpg',
-                pcOrder: 'md:order-6',  // PC: 下段右
-                spOrder: 'order-3',     // スマホ: 2行目左
-                onClick: () => {
-                    if (typeof openGachaSelectModal === 'function') {
-                        openGachaSelectModal();
-                    } else {
-                        alert("ガチャ機能読み込み中...");
-                    }
-                }
+                id: 'spacer-left',
+                title: '',
+                // 1x1ピクセルの透明な空画像（undefinedエラーを出さない）
+                image: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+                // 枠線・背景・影・クリック判定をすべて完全に消して不可視化するクラス
+                pcOrder: 'md:order-4 !border-none !bg-transparent !shadow-none !opacity-0 pointer-events-none',
+                spOrder: 'order-4 !border-none !bg-transparent !shadow-none !opacity-0 pointer-events-none',
+                onClick: () => {}
             },
             {
                 id: 'btn-story-mode',
                 title: '絵巻',
                 image: 'images/story_icon.jpg',
-                pcOrder: 'md:order-1',  // PC: 上段左
-                spOrder: 'order-4',     // スマホ: 2行目右
+                pcOrder: 'md:order-5',
+                spOrder: 'order-5',
                 onClick: () => {
                     if (typeof openStoryMode === 'function') {
                         openStoryMode();
@@ -345,13 +450,22 @@
                 }
             },
             {
+                id: 'spacer-right',
+                title: '',
+                image: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+                pcOrder: 'md:order-6 !border-none !bg-transparent !shadow-none !opacity-0 pointer-events-none',
+                spOrder: 'order-6 !border-none !bg-transparent !shadow-none !opacity-0 pointer-events-none',
+                onClick: () => {}
+            },
+
+            // --- 3段目 ---
+            {
                 id: 'btn-hero-custom',
                 title: '現身',
                 image: 'images/protagonist_icon.jpg',
-                pcOrder: 'md:order-4',  // PC: 下段左
-                spOrder: 'order-5',     // スマホ: 3行目左
+                pcOrder: 'md:order-7',
+                spOrder: 'order-7',
                 onClick: () => {
-                    // ★ hero_ui.js のモーダル起動関数を直接呼び出し
                     if (typeof openHeroModal === 'function') {
                         openHeroModal();
                     } else {
@@ -363,10 +477,24 @@
                 id: 'btn-deck-edit',
                 title: '編集',
                 image: 'images/deck_icon.jpg',
-                pcOrder: 'md:order-5',  // PC: 下段中央
-                spOrder: 'order-6',     // スマホ: 3行目右
+                pcOrder: 'md:order-8',
+                spOrder: 'order-8',
                 onClick: () => {
                     window.location.href = 'deck_edit.html';
+                }
+            },
+            {
+                id: 'btn-gacha-mode',
+                title: '御籤',
+                image: 'images/gacha_icon.jpg',
+                pcOrder: 'md:order-9',
+                spOrder: 'order-9',
+                onClick: () => {
+                    if (typeof openGachaSelectModal === 'function') {
+                        openGachaSelectModal();
+                    } else {
+                        alert("ガチャ機能読み込み中...");
+                    }
                 }
             }
         ];
@@ -853,18 +981,30 @@
 
         // 初期化実行（エラーが発生してもボタンだけは確実に描画する構成）
         document.addEventListener('DOMContentLoaded', () => {
-        // 1. 最優先でメニューボタンを描画
-        try {
-        renderTitleMenu();
-        initOpponentModalEvents();
-        } catch (e) {
-        console.error("メニュー描画エラー:", e);
-        }
+            // ★ 勾玉UIのリアルタイム更新関数
+            function updateTitleMagatamaDisplay() {
+                const el = document.getElementById('title-magatama-count');
+                if (el && typeof getMagatamaCount === 'function') {
+                    el.innerText = getMagatamaCount().toLocaleString();
+                }
+            }
 
-        // 2. CSVなどのデータロード（非同期でエラーが起きてもボタンに影響させない）
-        initGenFilterOptions().catch(err => console.error("GENフィルターエラー:", err));
-        initTitleData().catch(err => console.error("データロードエラー:", err));
-    });
+            // 初期表示 ＆ 変動イベントのバインド
+            updateTitleMagatamaDisplay();
+            window.addEventListener('magatamaUpdated', updateTitleMagatamaDisplay);
+
+            // 1. 最優先でメニューボタンを描画
+            try {
+                renderTitleMenu();
+                initOpponentModalEvents();
+            } catch (e) {
+                console.error("メニュー描画エラー:", e);
+            }
+
+            // 2. CSVなどのデータロード（非同期でエラーが起きてもボタンに影響させない）
+            initGenFilterOptions().catch(err => console.error("GENフィルターエラー:", err));
+            initTitleData().catch(err => console.error("データロードエラー:", err));
+        });
     
     // ==========================================
         // P2P通信モーダル制御処理 (PeerJS連動)
@@ -1101,6 +1241,9 @@
 <!-- =================================================== -->
 <!-- 主人公・所持データ管理 & 設定UIスクリプト -->
 <!-- =================================================== -->
+<!-- 通貨・勾玉統合管理コア（※最優先で読み込み） -->
+<script src="currency_manager.js"></script>
+
 <!-- ① データ＆セーブ管理コア -->
 <script src="hero_manager.js"></script>
 
@@ -1123,7 +1266,11 @@
 <!-- ⑤ 🛠️ デバッグツール -->
 <script src="debug_tool.js"></script>
 
-
+<!-- 歴史修練（典学）専用モジュール群 -->
+<script src="quiz_js/quiz_config.js"></script>
+<script src="quiz_js/quiz_storage.js"></script>
+<script src="quiz_js/quiz_engine.js"></script>
+<script src="quiz_js/quiz_ui.js"></script>
 
 </body>
 </html>
