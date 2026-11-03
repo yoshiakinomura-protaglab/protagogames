@@ -1,28 +1,85 @@
 /**
- * js/quiz/quiz_ui.js - 典学モード DOM自己生成 ＆ 画面制御
+ * js/quiz/quiz_ui.js - 典学モード DOM自己生成 ＆ 画面制御（完全マスターCSV駆動版）
  */
+
+// 木札画像アセット定義
+const QUIZ_TAG_ASSETS = {
+    choice: {
+        type: 'choice',
+        name: '四択',
+        image: 'images/tag_choice.png',
+        badgeColor: 'border-emerald-500/80 text-emerald-300 bg-emerald-950/80'
+    },
+    input: {
+        type: 'input',
+        name: '一問一答',
+        image: 'images/tag_input.png',
+        badgeColor: 'border-sky-500/80 text-sky-300 bg-sky-950/80'
+    },
+    desc: {
+        type: 'desc',
+        name: '記述',
+        image: 'images/tag_desc.png',
+        badgeColor: 'border-purple-500/80 text-purple-300 bg-purple-950/80'
+    },
+    random: {
+        type: 'random',
+        name: '最終試練',
+        image: 'images/tag_random.png',
+        badgeColor: 'border-amber-400 text-amber-300 bg-amber-950/80'
+    }
+};
+
+const NUMBER_KANJI = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
 let quizSelection = {
     step: 'title',
-    era: 'nara',
-    eraName: '奈良',
-    level: 'basic',
-    levelName: '初級',
-    levelData: null,
+    era: '',
+    eraName: '',
+    level: '',
+    levelName: '',
+    levelRow: null,      // quiz_master.csv の対象行データ
+    dynamicStages: [],   // CSVから自動判定されたステージリスト
     trial: 1,
     trialType: 'fixed',
     trialName: '第一試練'
 };
 
+let currentTrialActiveIndex = 0;
+
 // ==========================================
-// 1. クイズ用全画面HTMLの自己生成・注入
+// 1. BGM制御
+// ==========================================
+function switchQuizBGM(startQuiz) {
+    const titleBgm = document.getElementById('bgm-title');
+    const quizBgm = document.getElementById('bgm-quiz');
+
+    if (startQuiz) {
+        if (titleBgm && !titleBgm.paused) {
+            titleBgm.pause();
+            titleBgm.dataset.wasPlaying = 'true';
+        }
+        if (quizBgm) {
+            quizBgm.currentTime = 0;
+            quizBgm.play().catch(e => console.warn("クイズBGM再生失敗:", e));
+        }
+    } else {
+        if (quizBgm) quizBgm.pause();
+        if (titleBgm && titleBgm.dataset.wasPlaying === 'true') {
+            titleBgm.play().catch(e => console.warn("タイトルBGM再開失敗:", e));
+        }
+    }
+}
+
+// ==========================================
+// 2. モーダルDOM自己生成
 // ==========================================
 function ensureQuizModalDOM() {
     if (document.getElementById('quiz-modal')) return;
 
     const modal = document.createElement('div');
     modal.id = 'quiz-modal';
-    modal.className = 'fixed inset-0 z-50 hidden flex flex-col justify-between p-4 sm:p-8 select-none bg-stone-950 quiz-screen-bg';
+    modal.className = 'fixed inset-0 z-50 hidden flex flex-col justify-between p-2 sm:p-6 select-none bg-stone-950 quiz-screen-bg';
     modal.innerHTML = `
         <audio id="bgm-quiz" src="audio/quiz_bgm.mp3" loop preload="none"></audio>
 
@@ -39,27 +96,27 @@ function ensureQuizModalDOM() {
                     </div>
                 </div>
             </div>
-            <button onclick="event.stopPropagation(); closeQuizModal();" class="absolute top-6 right-6 px-4 py-1.5 bg-stone-900/80 border border-stone-700 hover:border-rose-500 text-stone-300 hover:text-rose-300 rounded text-sm transition">
+            <button onclick="event.stopPropagation(); closeQuizModal();" class="absolute top-6 right-6 px-4 py-1.5 bg-stone-900/80 border border-stone-700 hover:border-rose-500 text-stone-300 hover:text-rose-300 rounded text-sm transition z-50 cursor-pointer">
                 <i class="fa-solid fa-person-walking-arrow-right mr-1.5"></i>戻る
             </button>
         </div>
 
         <!-- 2. 選択メニュー階層コンテナ（時代 ➔ 等級 ➔ 試練） -->
-        <div id="quiz-view-select" class="absolute inset-0 flex flex-col justify-between p-6 sm:p-10 z-20 hidden">
+        <div id="quiz-view-select" class="absolute inset-0 flex flex-col justify-between p-3 sm:p-6 z-20 hidden">
             <div class="w-full max-w-5xl mx-auto flex items-center justify-between border-b border-amber-900/60 pb-3">
                 <div class="flex items-center flex-wrap gap-x-3 gap-y-1">
-                    <span class="text-amber-400 font-serif text-xl sm:text-2xl font-bold flex items-center">
+                    <span class="text-amber-400 font-serif text-lg sm:text-2xl font-bold flex items-center">
                         <i class="fa-solid fa-scroll mr-2 text-amber-500"></i>典学修練録
                     </span>
                     <span id="quiz-select-breadcrumb" class="text-stone-400 text-xs sm:text-sm font-serif"></span>
                     <h2 id="quiz-select-heading" class="text-amber-200 font-serif text-sm sm:text-base font-bold pl-2 border-l border-amber-800/80"></h2>
                 </div>
-                <button onclick="handleQuizMenuBack()" class="px-3 py-1 bg-stone-900/80 border border-stone-700 hover:border-amber-600 text-stone-300 rounded text-sm transition">
+                <button onclick="handleQuizMenuBack()" class="px-3 py-1 bg-stone-900/80 border border-stone-700 hover:border-amber-600 text-stone-300 rounded text-sm transition cursor-pointer">
                     <i class="fa-solid fa-arrow-left mr-1"></i>戻る
                 </button>
             </div>
-            <div class="w-full max-w-5xl mx-auto flex-1 flex flex-col justify-start pt-3 pb-2 overflow-hidden">
-                <div id="quiz-select-grid" class="w-full overflow-y-auto pr-1"></div>
+            <div class="w-full max-w-5xl mx-auto flex-1 flex flex-col justify-start pt-2 pb-2 overflow-hidden relative">
+                <div id="quiz-select-grid" class="w-full h-full overflow-hidden flex flex-col"></div>
             </div>
             <div class="w-full max-w-4xl mx-auto text-center text-stone-500 text-xs tracking-widest font-serif">
                 大和の縁 〜典学修練場〜
@@ -73,7 +130,7 @@ function ensureQuizModalDOM() {
             <p class="text-stone-400 text-sm font-serif mt-6 tracking-widest">いざ、尋常に修練へ入らん――</p>
         </div>
 
-        <!-- 4. 出題画面（3形式共通マウント版） -->
+        <!-- 4. 出題画面 -->
         <div id="quiz-view-battle" class="flex flex-col justify-between h-full w-full hidden">
             <header class="w-full max-w-4xl mx-auto flex items-center justify-between border-b border-amber-900/60 pb-3">
                 <div class="flex items-center space-x-3">
@@ -82,7 +139,7 @@ function ensureQuizModalDOM() {
                 </div>
                 <div class="flex items-center space-x-2 bg-stone-900/80 px-4 py-1.5 rounded-full border border-amber-800/50 shadow-inner">
                     <i class="fa-solid fa-stopwatch text-amber-400 text-base animate-pulse"></i>
-                    <span id="quiz-timer" class="font-mono text-lg sm:text-xl font-bold text-amber-300 w-16 text-center">15.00</span>
+                    <span id="quiz-timer" class="font-mono text-lg sm:text-xl font-bold text-amber-300 w-20 text-center">15.00</span>
                 </div>
                 <button onclick="closeQuizModal()" class="px-3 py-1 bg-stone-900/90 border border-stone-700 hover:border-rose-500/80 text-stone-300 hover:text-rose-300 rounded text-sm transition">
                     <i class="fa-solid fa-person-walking-arrow-right mr-1"></i>退出
@@ -101,7 +158,6 @@ function ensureQuizModalDOM() {
                     </p>
                 </div>
 
-                <!-- ★ 3形式が動的に差し替わる共通回答マウント -->
                 <div id="quiz-answer-mount" class="w-full"></div>
 
                 <div id="quiz-feedback-box" class="mt-4 p-4 rounded-xl border text-sm sm:text-base hidden transition shadow-lg">
@@ -115,7 +171,7 @@ function ensureQuizModalDOM() {
             </footer>
         </div>
 
-        <!-- 5. 出陣確認モーダル -->
+        <!-- 5. 出陣確認ダイアログ -->
         <div id="quiz-confirm-dialog" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 hidden">
             <div class="bg-stone-900 border-2 border-amber-600/80 rounded-2xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl">
                 <div class="text-amber-400 text-3xl mb-3"><i class="fa-solid fa-feather-pointed"></i></div>
@@ -147,7 +203,6 @@ function ensureQuizModalDOM() {
     document.body.appendChild(modal);
 }
 
-// 星ゲージ生成
 function renderStarGauge(rate) {
     const filledStars = Math.min(5, Math.floor(rate / 0.20));
     let starsHtml = '';
@@ -178,10 +233,14 @@ function showView(viewName) {
     }
 }
 
-// 階層選択メニュー制御
-function goToQuizMenuStep(step) {
+// ==========================================
+// 3. 階層選択メニュー（完全マスターCSV駆動）
+// ==========================================
+async function goToQuizMenuStep(step) {
     quizSelection.step = step;
     showView('select');
+
+    await loadQuizMasterCSV();
 
     const grid = document.getElementById('quiz-select-grid');
     const heading = document.getElementById('quiz-select-heading');
@@ -190,27 +249,30 @@ function goToQuizMenuStep(step) {
 
     grid.innerHTML = '';
 
-    // 1. 時代選択
+    // 1. 時代選択（is_active === "1" の時代のみ動的表示）
     if (step === 'era') {
         heading.innerText = '挑む時代を選択せよ';
         breadcrumb.innerText = '時代選択';
         grid.className = "grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 max-h-[75vh] overflow-y-auto px-1 py-1 w-full";
 
-        QUIZ_ERAS.forEach(era => {
+        const activeEras = getActiveErasFromMaster();
+
+        if (activeEras.length === 0) {
+            grid.innerHTML = `<div class="text-stone-400 font-serif text-center col-span-2 py-12">現在開放されている修練場はありません。</div>`;
+            return;
+        }
+
+        activeEras.forEach(era => {
             const btn = document.createElement('button');
-            if (era.banner) {
-                btn.className = "relative w-full h-28 sm:h-32 rounded-xl overflow-hidden border-2 border-amber-600/70 hover:border-amber-400 active:scale-[0.99] transition duration-200 group shadow-xl text-left bg-stone-900";
-                btn.innerHTML = `
-                    <img src="${era.banner}" alt="${era.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                    <div class="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-transparent to-black/30"></div>
-                    <div class="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] sm:text-xs font-serif">
-                        <span class="text-amber-400 font-mono font-bold drop-shadow">修練開放中</span>
-                    </div>
-                `;
-            } else {
-                btn.className = "py-4 sm:py-5 px-3 bg-stone-900/90 hover:bg-amber-950/70 active:scale-[0.98] border-2 border-amber-900/60 hover:border-amber-500 rounded-xl flex items-center justify-center text-center transition duration-150 group shadow-md";
-                btn.innerHTML = `<span class="text-base sm:text-xl font-serif font-bold text-amber-100 group-hover:text-amber-300 tracking-wider">${era.name}</span>`;
-            }
+            btn.className = "relative w-full h-28 sm:h-32 rounded-xl overflow-hidden border-2 border-amber-600/70 hover:border-amber-400 active:scale-[0.99] transition duration-200 group shadow-xl text-left bg-stone-900 cursor-pointer";
+            btn.innerHTML = `
+                <img src="${era.banner}" alt="${era.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.src='images/quiz_carousel_bg.jpg'">
+                <div class="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-transparent to-black/30"></div>
+                <div class="absolute bottom-2 left-3 right-3 flex items-center justify-between text-xs font-serif">
+                    <span class="text-amber-100 font-bold text-lg drop-shadow">${era.name}</span>
+                    <span class="text-amber-400 font-mono font-bold drop-shadow">修練開放中</span>
+                </div>
+            `;
             btn.onclick = () => {
                 quizSelection.era = era.id;
                 quizSelection.eraName = era.name;
@@ -219,46 +281,51 @@ function goToQuizMenuStep(step) {
             grid.appendChild(btn);
         });
 
-    // 2. 等級選択
+    // 2. 等級選択（選択中の時代で is_active === "1" の等級のみ動的表示）
     } else if (step === 'level') {
         heading.innerText = '等級を選択せよ';
         breadcrumb.innerText = quizSelection.eraName;
-        grid.className = "flex flex-col justify-between gap-2.5 sm:gap-3 h-[72vh] w-full max-w-xl mx-auto overflow-hidden px-2 py-1";
+        grid.className = "flex flex-col justify-center gap-3.5 h-[72vh] w-full max-w-xl mx-auto overflow-hidden px-2 py-1";
 
+        const activeLevels = getActiveLevelsForEra(quizSelection.era);
         const progressData = getQuizProgress();
-        const progress = progressData[quizSelection.era] || {
-            basic: { cleared: false, stagesCleared: 0, loops: 0, randomCleared: false, randomLoops: 0 },
-            normal: { cleared: false, stagesCleared: 0, loops: 0, randomCleared: false, randomLoops: 0 },
-            hard: { cleared: false, stagesCleared: 0, loops: 0, randomCleared: false, randomLoops: 0 }
-        };
+        const progress = progressData[quizSelection.era] || {};
 
-        NARA_LEVELS.forEach((lvl, idx) => {
+        activeLevels.forEach((row, idx) => {
+            const lvlId = row.level_id;
+            const lvlData = progress[lvlId] || { stagesCleared: 0, loops: 0, randomCleared: false, randomLoops: 0 };
+
+            // 前等級クリアアンロック判定
             let isUnlocked = true;
-            if (idx === 1) isUnlocked = progress.basic.cleared;
-            if (idx === 2) isUnlocked = progress.normal.cleared;
+            if (idx > 0) {
+                const prevLvlId = activeLevels[idx - 1].level_id;
+                isUnlocked = progress[prevLvlId]?.cleared || false;
+            }
 
-            const lvlData = progress[lvl.id] || { stagesCleared: 0, loops: 0, randomCleared: false, randomLoops: 0 };
-            const fixedCleared = Math.min(lvl.stages, lvlData.stagesCleared || 0);
+            const banner = row.level_banner || `images/quiz_${quizSelection.era}_${lvlId}_banner.jpg`;
+            const fixedCleared = Math.min(3, lvlData.stagesCleared || 0);
             const loopDone = Math.min(10, lvlData.loops || 0) + Math.min(10, lvlData.randomLoops || 0);
             const randomCleared = lvlData.randomCleared ? 1 : 0;
-            const currentSum = fixedCleared + loopDone + randomCleared;
-            const requiredTotal = lvl.stages + 10 + 1 + 10;
-            const rate = Math.min(1.0, currentSum / requiredTotal);
+            const rate = Math.min(1.0, (fixedCleared + loopDone + randomCleared) / 24);
             const stars = renderStarGauge(rate);
             const ratePercent = Math.min(100, Math.floor(rate * 100));
 
             const btn = document.createElement('button');
-            const fitStyle = "height: calc((72vh - 24px) / 3); max-width: calc((72vh - 24px) / 3 * 16 / 7); aspect-ratio: 16 / 7;";
+            const fitStyle = `height: ${Math.floor(65 / activeLevels.length)}vh; max-height: 180px; aspect-ratio: 16 / 7;`;
 
             if (isUnlocked) {
                 btn.style.cssText = fitStyle;
-                btn.className = "relative w-full rounded-xl sm:rounded-2xl overflow-hidden border-2 border-amber-600/70 hover:border-amber-400 active:scale-[0.99] transition duration-200 group shadow-2xl text-left bg-stone-900 block cursor-pointer mx-auto flex-shrink-0";
+                btn.className = "relative w-full rounded-2xl overflow-hidden border-2 border-amber-600/70 hover:border-amber-400 active:scale-[0.99] transition duration-200 group shadow-2xl text-left bg-stone-900 block cursor-pointer mx-auto flex-shrink-0";
                 btn.innerHTML = `
-                    <img src="${lvl.banner}" alt="${lvl.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                    <img src="${banner}" alt="${row.level_name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.src='images/quiz_carousel_bg.jpg'">
                     <div class="absolute inset-0 bg-gradient-to-t from-stone-950/95 via-stone-950/25 to-transparent"></div>
-                    <div class="absolute bottom-2 left-4 right-4 flex flex-col gap-1.5 pointer-events-none">
+                    <div class="absolute top-3 left-4">
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950/80 border border-amber-500/60 text-amber-300 font-serif">${row.level_name}</span>
+                        <h3 class="text-xl sm:text-2xl font-serif font-black text-amber-100 mt-1">${row.level_name}修練</h3>
+                    </div>
+                    <div class="absolute bottom-2 left-4 right-4 flex flex-col gap-1 pointer-events-none">
                         <div class="flex items-center justify-between">
-                            <div class="text-sm sm:text-base tracking-widest flex items-center select-none">${stars}</div>
+                            <div class="text-xs sm:text-sm tracking-widest flex items-center select-none">${stars}</div>
                             <div class="text-[10px] sm:text-xs text-amber-400 font-mono font-bold drop-shadow">${ratePercent}%</div>
                         </div>
                         <div class="w-full bg-stone-950/90 h-1.5 rounded-full overflow-hidden border border-amber-900/60 shadow-inner">
@@ -266,111 +333,350 @@ function goToQuizMenuStep(step) {
                         </div>
                     </div>
                 `;
-                btn.onclick = () => {
-                    quizSelection.level = lvl.id;
-                    quizSelection.levelName = lvl.name;
-                    quizSelection.levelData = lvl;
+                btn.onclick = async () => {
+                    quizSelection.level = lvlId;
+                    quizSelection.levelName = row.level_name;
+                    quizSelection.levelRow = row;
+
+                    // 対象CSVをロードして試練構成を自動解析
+                    await loadTargetQuizCSV(row.quiz_csv);
+                    quizSelection.dynamicStages = getLevelStageInfo();
+
                     goToQuizMenuStep('trial');
                 };
             } else {
                 btn.style.cssText = fitStyle;
-                btn.className = "relative w-full rounded-xl sm:rounded-2xl overflow-hidden border-2 border-stone-800 text-left bg-stone-950 opacity-60 grayscale pointer-events-none block mx-auto flex-shrink-0";
+                btn.className = "relative w-full rounded-2xl overflow-hidden border-2 border-stone-800 text-left bg-stone-950 opacity-60 grayscale pointer-events-none block mx-auto flex-shrink-0";
                 btn.innerHTML = `
-                    <img src="${lvl.banner}" alt="${lvl.name}" class="absolute inset-0 w-full h-full object-cover">
-                    <div class="absolute inset-0 bg-stone-950/75 flex flex-col items-center justify-center">
-                        <i class="fa-solid fa-lock text-amber-500/80 text-xl sm:text-2xl mb-1 drop-shadow"></i>
-                        <span class="text-stone-300 font-serif text-[11px] sm:text-xs tracking-wider">${idx === 1 ? '初級 満点クリアで解放' : '中級 満点クリアで解放'}</span>
+                    <div class="absolute inset-0 bg-stone-950/85 flex flex-col items-center justify-center">
+                        <i class="fa-solid fa-lock text-amber-500/80 text-2xl mb-1 drop-shadow"></i>
+                        <span class="text-stone-300 font-serif text-xs tracking-wider">前等級 満点制覇で開放</span>
                     </div>
                 `;
             }
             grid.appendChild(btn);
         });
 
-    // 3. 試練一覧（木札バナー ＆ 順次アンロック）
+    // 3. 試練一覧（木札カルーセル ＆ 勾玉星図）
     } else if (step === 'trial') {
-        const lvl = quizSelection.levelData || NARA_LEVELS[0];
+        const lvl = quizSelection.levelRow || { level_id: quizSelection.level, level_name: quizSelection.levelName };
         heading.innerText = '試練を選択せよ';
         breadcrumb.innerText = `${quizSelection.eraName} > ${quizSelection.levelName}`;
-        grid.className = "flex flex-col gap-3 max-w-xl mx-auto w-full max-h-[75vh] overflow-y-auto px-1 py-1";
-
-        for (let i = 1; i <= lvl.stages; i++) {
-            const trialIdx = i - 1;
-            const trialType = lvl.stageTypes[trialIdx] || 'choice';
-            const tagAsset = QUIZ_TAG_ASSETS[trialType] || QUIZ_TAG_ASSETS.choice;
-            const isUnlocked = isTrialUnlocked(quizSelection.era, lvl.id, trialIdx);
-            const trialName = `第${NUMBER_KANJI[trialIdx]}試練`;
-
-            const btn = document.createElement('button');
-            if (isUnlocked) {
-                btn.className = "relative w-full h-20 rounded-xl overflow-hidden border-2 border-amber-600/70 hover:border-amber-400 active:scale-[0.99] transition duration-150 shadow-lg text-left bg-stone-900 group cursor-pointer";
-                btn.innerHTML = `
-                    <img src="${tagAsset.image}" alt="${tagAsset.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.style.display='none'">
-                    <div class="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-950/40 to-transparent"></div>
-                    <div class="relative z-10 h-full flex items-center justify-between px-5 font-serif">
-                        <div>
-                            <div class="text-lg sm:text-xl font-bold text-amber-100 group-hover:text-amber-300 drop-shadow">${trialName}</div>
-                            <div class="text-[11px] text-stone-300 mt-0.5">拾問（10問）</div>
-                        </div>
-                        <span class="px-2.5 py-1 text-xs font-bold rounded border ${tagAsset.badgeColor}">
-                            ${tagAsset.name}
-                        </span>
-                    </div>
-                `;
-                btn.onclick = () => {
-                    quizSelection.trial = i;
-                    quizSelection.trialType = 'fixed';
-                    quizSelection.trialName = `${trialName}（${tagAsset.name}）`;
-                    openQuizConfirmDialog();
-                };
-            } else {
-                btn.className = "relative w-full h-20 rounded-xl overflow-hidden border border-stone-800 text-left bg-stone-950 opacity-50 grayscale pointer-events-none";
-                btn.innerHTML = `
-                    <img src="${tagAsset.image}" alt="${tagAsset.name}" class="absolute inset-0 w-full h-full object-cover" onerror="this.style.display='none'">
-                    <div class="absolute inset-0 bg-stone-950/80 flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-lock text-amber-500/80 text-lg"></i>
-                        <span class="text-stone-300 font-serif text-xs">第${NUMBER_KANJI[trialIdx - 1]}試練 満点クリアで解放</span>
-                    </div>
-                `;
-            }
-            grid.appendChild(btn);
+        
+        if (!quizSelection.dynamicStages || quizSelection.dynamicStages.length === 0) {
+            const csvPath = quizSelection.levelRow?.quiz_csv || `quiz/quiz_${quizSelection.era}_${quizSelection.level}.csv`;
+            await loadTargetQuizCSV(csvPath);
+            quizSelection.dynamicStages = getLevelStageInfo();
         }
 
-        // 昇段ランダム検定ボタン（最終ステージクリアで解放）
-        const randomUnlocked = isRandomTestUnlocked(quizSelection.era, lvl.id, lvl.stages);
-        const randomBtn = document.createElement('button');
-
-        if (randomUnlocked) {
-            randomBtn.className = "relative w-full h-22 rounded-xl overflow-hidden border-2 border-amber-400 bg-gradient-to-r from-amber-950 via-stone-900 to-amber-950 hover:from-amber-900 p-4 shadow-xl text-left group cursor-pointer transition active:scale-[0.99] mt-2";
-            randomBtn.innerHTML = `
-                <div class="flex items-center justify-between font-serif">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-dice text-amber-400 text-2xl animate-spin-slow"></i>
-                        <div>
-                            <div class="text-base sm:text-lg font-bold text-amber-200 group-hover:text-amber-100">昇段ランダム検定</div>
-                            <div class="text-[11px] text-amber-400/80">四択・一問一答・記述が混在</div>
-                        </div>
-                    </div>
-                    <span class="px-2.5 py-1 text-xs font-bold rounded border border-amber-400 text-amber-300 bg-amber-950/80 animate-pulse">解放中</span>
-                </div>
-            `;
-            randomBtn.onclick = () => {
-                quizSelection.trial = 0;
-                quizSelection.trialType = 'random';
-                quizSelection.trialName = '昇段ランダム検定';
-                openQuizConfirmDialog();
-            };
-        } else {
-            randomBtn.className = "relative w-full h-22 rounded-xl overflow-hidden border border-stone-800 bg-stone-950/60 p-4 opacity-50 grayscale pointer-events-none mt-2";
-            randomBtn.innerHTML = `
-                <div class="flex items-center justify-center space-x-2 font-serif text-stone-400 text-xs h-full">
-                    <i class="fa-solid fa-lock text-amber-500/70 text-base"></i>
-                    <span>全試練（第${NUMBER_KANJI[lvl.stages - 1]}試練まで）満点クリアで解放</span>
-                </div>
-            `;
-        }
-        grid.appendChild(randomBtn);
+        renderTrialCarouselView(grid, lvl);
     }
 }
+
+// ==========================================
+// 4. 試練カルーセル ＆ 勾玉星図描画
+// ==========================================
+const STAR_CHART_COORDS = [
+    { x: 18, y: 55 },
+    { x: 26, y: 40 },
+    { x: 35, y: 32 },
+    { x: 44, y: 48 },
+    { x: 53, y: 62 },
+    { x: 62, y: 50 },
+    { x: 70, y: 35 },
+    { x: 76, y: 24 },
+    { x: 80, y: 45 },
+    { x: 84, y: 60 }
+];
+
+function renderTrialCarouselView(container, lvl) {
+    const eraId = quizSelection.era;
+    const levelId = lvl.level_id || quizSelection.level;
+    const progressData = getQuizProgress();
+    const lvlProg = progressData[eraId]?.[levelId] || { stagesCleared: 0, loops: 0 };
+
+    const stagesList = quizSelection.dynamicStages && quizSelection.dynamicStages.length > 0 
+        ? quizSelection.dynamicStages 
+        : [
+            { stageNum: 1, type: 'choice' },
+            { stageNum: 2, type: 'input' },
+            { stageNum: 3, type: 'desc' }
+        ];
+
+    const totalStages = stagesList.length;
+    const randomUnlocked = isRandomTestUnlocked(eraId, levelId, totalStages);
+    const totalItemsCount = totalStages + 1; // 通常試練 + 最終試練
+
+    container.className = "w-full h-full flex flex-col overflow-hidden relative";
+    container.innerHTML = `
+        <!-- ① 上部：格子戸背景 ＆ 縦長木札 横カルーセル（52%） -->
+        <div class="relative w-full h-[52%] overflow-hidden flex items-center justify-center border-b border-amber-900/60 rounded-t-xl" 
+             style="background-image: url('images/quiz_carousel_bg.jpg'); background-size: cover; background-position: center;">
+            <div class="absolute inset-0 bg-stone-950/20 pointer-events-none"></div>
+
+            <!-- 左右送り矢印ボタン -->
+            <button onclick="scrollTrialCarousel(-1)" class="absolute left-2 z-30 w-8 h-12 bg-black/60 hover:bg-black/90 active:scale-95 text-amber-400 border border-amber-600/40 rounded flex items-center justify-center cursor-pointer">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button onclick="scrollTrialCarousel(1)" class="absolute right-2 z-30 w-8 h-12 bg-black/60 hover:bg-black/90 active:scale-95 text-amber-400 border border-amber-600/40 rounded flex items-center justify-center cursor-pointer">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+
+            <!-- 横スクロールコンテナ -->
+            <div id="trial-carousel-slider" class="w-full h-full flex items-center gap-6 px-[35%] overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar py-3">
+                ${stagesList.map((stg, idx) => {
+                    const stageNum = stg.stageNum;
+                    const trialType = stg.type;
+                    const tagAsset = QUIZ_TAG_ASSETS[trialType] || QUIZ_TAG_ASSETS.choice;
+                    const isUnlocked = isTrialUnlocked(eraId, levelId, idx);
+                    const trialName = `第${NUMBER_KANJI[idx] || (idx + 1)}試練`;
+                    const isCleared = (lvlProg.stagesCleared || 0) > idx;
+                    const isMaxLoop = (lvlProg.loops || 0) >= 10;
+
+                    return `
+                    <div id="trial-card-${idx}" 
+                         onclick="${isUnlocked ? `window.handleTrialCardClick(${idx}, ${stageNum}, '${trialType}', '${trialName}')` : ''}"
+                         data-index="${idx}"
+                         class="trial-card-item relative flex-shrink-0 h-[92%] aspect-[1/2.4] snap-center rounded-lg transition-transform duration-300 select-none cursor-pointer group ${isUnlocked ? 'hover:scale-[1.03] active:scale-95' : 'filter brightness-75'}">
+                        
+                        <!-- 木札画像（CSVの形式から自動決定） -->
+                        <img src="${tagAsset.image}" class="w-full h-full object-contain pointer-events-none drop-shadow-[0_10px_20px_rgba(0,0,0,0.85)]" alt="${trialName}">
+
+                        <!-- 札の文字 -->
+                        <div class="absolute inset-0 pt-24 pb-10 px-4 flex flex-col items-center justify-center pointer-events-none">
+                            <div class="font-serif font-black text-amber-100 tracking-[0.25em] text-base sm:text-lg [writing-mode:vertical-rl] drop-shadow-[0_2px_5px_rgba(0,0,0,0.95)]">
+                                ${trialName}
+                            </div>
+                        </div>
+
+                        <!-- 封印鎖 -->
+                        ${!isUnlocked ? `
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <img src="images/tag_locked_overlay.png" class="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]" alt="封印">
+                            </div>
+                        ` : ''}
+
+                        <!-- クリア朱印 -->
+                        ${isCleared ? `
+                            <div class="absolute top-[30%] right-6 sm:right-6 w-7 h-7 rounded-full border-2 ${
+                                isMaxLoop 
+                                    ? 'border-yellow-400 bg-amber-950 text-yellow-300 shadow-yellow-500/50' 
+                                    : 'border-rose-600 bg-rose-950 text-rose-300'
+                            } font-serif font-black text-xs flex items-center justify-center rotate-12 shadow-xl z-20 pointer-events-none">
+                                ${isMaxLoop ? '極' : '済'}
+                            </div>
+                        ` : ''}
+
+                        <!-- 周回カウント -->
+                        ${isCleared ? `
+                            <div class="absolute bottom-6 sm:bottom-7 inset-x-1 flex justify-center pointer-events-none z-20">
+                                <span class="px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-mono font-extrabold tracking-tight shadow-lg border ${
+                                    isMaxLoop 
+                                        ? 'bg-amber-950/95 border-yellow-400 text-yellow-300 shadow-yellow-500/40' 
+                                        : 'bg-stone-950/95 border-amber-600/70 text-amber-200'
+                                }">
+                                    ${lvlProg.loops || 1}/10 クリア
+                                </span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    `;
+                }).join('')}
+
+                <!-- ★ 最終試練（ランダム検定） -->
+                <div id="trial-card-${totalStages}" 
+                     onclick="${randomUnlocked ? `window.handleTrialCardClick(${totalStages}, 0, 'random', '最終試練')` : ''}"
+                     data-index="${totalStages}"
+                     class="trial-card-item relative flex-shrink-0 h-[92%] aspect-[1/2.4] snap-center rounded-lg transition-transform duration-300 select-none cursor-pointer group ${randomUnlocked ? 'hover:scale-[1.03] active:scale-95' : 'filter brightness-75'}">
+                    
+                    <img src="images/tag_random.png" class="w-full h-full object-contain pointer-events-none drop-shadow-[0_10px_20px_rgba(0,0,0,0.85)]" alt="最終試練" onerror="this.src='images/tag_desc.png'">
+
+                    <div class="absolute inset-0 pt-24 pb-10 px-4 flex flex-col items-center justify-center pointer-events-none">
+                        <div class="font-serif font-black text-stone-950 tracking-[0.2em] text-base sm:text-lg [writing-mode:vertical-rl] drop-shadow-[0_1px_1px_rgba(255,215,0,0.8)]">
+                            最終試練
+                        </div>
+                    </div>
+
+                    ${!randomUnlocked ? `
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <img src="images/tag_locked_overlay.png" class="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]" alt="封印">
+                        </div>
+                    ` : ''}
+
+                    ${lvlProg.randomCleared ? `
+                        <div class="absolute top-[30%] right-6 sm:right-6 w-7 h-7 rounded-full border-2 ${
+                            (lvlProg.randomLoops || 0) >= 10 
+                                ? 'border-yellow-400 bg-amber-950 text-yellow-300 shadow-yellow-500/50' 
+                                : 'border-rose-600 bg-rose-950 text-rose-300'
+                        } font-serif font-black text-xs flex items-center justify-center rotate-12 shadow-xl z-20 pointer-events-none">
+                            ${(lvlProg.randomLoops || 0) >= 10 ? '極' : '済'}
+                        </div>
+                        <div class="absolute bottom-6 sm:bottom-7 inset-x-1 flex justify-center pointer-events-none z-20">
+                            <span class="px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-mono font-extrabold tracking-tight shadow-lg border ${
+                                (lvlProg.randomLoops || 0) >= 10 
+                                    ? 'bg-amber-950/95 border-yellow-400 text-yellow-300 shadow-yellow-500/40' 
+                                    : 'bg-stone-950/95 border-amber-600/70 text-amber-200'
+                            }">
+                                ${lvlProg.randomLoops || 1}/10 クリア
+                            </span>
+                        </div>
+                    ` : ''}
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ② 下部：絵巻星図背景 ＆ 勾玉星図マップ -->
+        <div class="relative w-full h-[48%] overflow-hidden flex items-center justify-center bg-stone-950 p-2 sm:p-4">
+            
+            <div class="relative h-full aspect-[16/8] max-w-full rounded-lg shadow-2xl flex items-center justify-center overflow-hidden border border-amber-950"
+                 style="background-image: url('images/quiz_star_chart_bg.jpg'); background-size: 100% 100%; background-repeat: no-repeat; background-position: center;">
+                
+                <div class="absolute inset-0">
+                    ${Array.from({ length: totalItemsCount }).map((_, idx) => {
+                        const pos = STAR_CHART_COORDS[idx % STAR_CHART_COORDS.length];
+                        const isFinal = idx === totalStages;
+
+                        let isUnlocked = false;
+                        let isCleared = false;
+                        let isMaxLoop = false;
+                        let labelText = `${idx + 1}`;
+
+                        if (!isFinal) {
+                            isUnlocked = isTrialUnlocked(eraId, levelId, idx);
+                            isCleared = (lvlProg.stagesCleared || 0) > idx;
+                            isMaxLoop = (lvlProg.loops || 0) >= 10;
+                        } else {
+                            isUnlocked = randomUnlocked;
+                            isCleared = !!lvlProg.randomCleared;
+                            isMaxLoop = (lvlProg.randomLoops || 0) >= 10;
+                            labelText = "終";
+                        }
+
+                        let magatamaImg = 'images/magatama_gray.png';
+                        if (isMaxLoop) magatamaImg = 'images/magatama_gold.png';
+                        else if (isCleared) magatamaImg = 'images/magatama_green.png';
+
+                        return `
+                        <div id="magatama-node-${idx}"
+                             onclick="jumpToCarouselIndex(${idx})"
+                             style="left: ${pos.x}%; top: ${pos.y}%;"
+                             class="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer z-20 flex flex-col items-center group">
+                            
+                            <div class="magatama-icon-wrapper relative w-6 h-6 sm:w-8 sm:h-8 transition-all duration-300 group-hover:scale-125">
+                                <img src="${magatamaImg}" class="w-full h-full object-contain filter drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]" alt="勾玉">
+                            </div>
+                            <span class="text-[9px] font-mono font-bold ${isFinal ? 'text-yellow-300 font-serif' : 'text-amber-200'} -mt-0.5 pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
+                                ${labelText}
+                            </span>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+
+        </div>
+    `;
+
+    setupCarouselScrollEvents(totalItemsCount);
+}
+
+function setupCarouselScrollEvents(totalStages) {
+    const slider = document.getElementById('trial-carousel-slider');
+    if (!slider) return;
+
+    slider.onscroll = () => {
+        const center = slider.scrollLeft + slider.clientWidth / 2;
+        let closestIdx = 0;
+        let minDiff = Infinity;
+
+        for (let i = 0; i < totalStages; i++) {
+            const card = document.getElementById(`trial-card-${i}`);
+            if (card) {
+                const cardCenter = card.offsetLeft + card.clientWidth / 2;
+                const diff = Math.abs(center - cardCenter);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestIdx = i;
+                }
+            }
+        }
+        updateActiveIndexDisplay(closestIdx);
+    };
+
+    updateActiveIndexDisplay(0);
+}
+
+function updateActiveIndexDisplay(index) {
+    currentTrialActiveIndex = index;
+
+    document.querySelectorAll('.trial-card-item').forEach((el, i) => {
+        if (i === index) {
+            el.style.transform = 'scale(1.08)';
+            el.style.filter = 'brightness(1.05)';
+            el.style.zIndex = '10';
+        } else {
+            el.style.transform = 'scale(0.92)';
+            el.style.filter = 'brightness(0.7)';
+            el.style.zIndex = '1';
+        }
+    });
+
+    document.querySelectorAll('[id^="magatama-node-"]').forEach((node, i) => {
+        const wrapper = node.querySelector('.magatama-icon-wrapper');
+        if (!wrapper) return;
+        if (i === index) {
+            wrapper.style.filter = 'drop-shadow(0 0 10px rgba(251, 191, 36, 1)) drop-shadow(0 0 20px rgba(245, 158, 11, 0.8))';
+            wrapper.style.transform = 'scale(1.25)';
+        } else {
+            wrapper.style.filter = 'none';
+            wrapper.style.transform = 'scale(1.0)';
+        }
+    });
+}
+
+function scrollTrialCarousel(direction) {
+    const slider = document.getElementById('trial-carousel-slider');
+    if (!slider) return;
+    const nextIdx = Math.max(0, currentTrialActiveIndex + direction);
+    jumpToCarouselIndex(nextIdx);
+}
+
+window.scrollTrialCarousel = scrollTrialCarousel;
+
+window.jumpToCarouselIndex = function(index) {
+    const slider = document.getElementById('trial-carousel-slider');
+    const targetCard = document.getElementById(`trial-card-${index}`);
+    if (slider && targetCard) {
+        const targetScrollLeft = targetCard.offsetLeft - (slider.clientWidth / 2) + (targetCard.clientWidth / 2);
+        slider.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+    }
+};
+
+window.handleTrialCardClick = function(index, stageNum, trialType, trialName) {
+    if (currentTrialActiveIndex !== index) {
+        jumpToCarouselIndex(index);
+    } else {
+        quizSelection.trial = stageNum;
+        quizSelection.trialType = trialType;
+        quizSelection.trialName = trialName;
+        openQuizConfirmDialog();
+    }
+};
+
+window.selectTrialItem = function(stageNum, trialType, trialName) {
+    quizSelection.trial = stageNum;
+    quizSelection.trialType = 'fixed';
+    quizSelection.trialName = trialName;
+    openQuizConfirmDialog();
+};
+
+window.selectRandomExamItem = function() {
+    quizSelection.trial = 0;
+    quizSelection.trialType = 'random';
+    quizSelection.trialName = '最終試練';
+    openQuizConfirmDialog();
+};
 
 function handleQuizMenuBack() {
     if (quizSelection.step === 'era') {
@@ -382,7 +688,9 @@ function handleQuizMenuBack() {
     }
 }
 
-// 出陣確認ダイアログ
+// ==========================================
+// 5. 出陣カウントダウン ＆ 出題
+// ==========================================
 function openQuizConfirmDialog() {
     const dialog = document.getElementById('quiz-confirm-dialog');
     const text = document.getElementById('quiz-confirm-target-text');
@@ -396,7 +704,6 @@ function closeQuizConfirmDialog() {
     document.getElementById('quiz-confirm-dialog')?.classList.add('hidden');
 }
 
-// カウントダウン開始
 function executeQuizStartCountdown() {
     closeQuizConfirmDialog();
     const countdownView = document.getElementById('quiz-view-countdown');
@@ -426,12 +733,12 @@ function executeQuizStartCountdown() {
     }, 1000);
 }
 
-// 出題開始
 async function startSelectedQuiz() {
     showView('battle');
 
-    if (cachedQuizData.allLevelQuestions.length === 0) {
-        await loadLevelQuizData(quizSelection.era, quizSelection.level);
+    const csvPath = quizSelection.levelRow?.quiz_csv || `quiz/quiz_${quizSelection.era}_${quizSelection.level}.csv`;
+    if (cachedQuizData.csvPath !== csvPath || cachedQuizData.allLevelQuestions.length === 0) {
+        await loadTargetQuizCSV(csvPath);
     }
 
     let questions = [];
@@ -442,7 +749,7 @@ async function startSelectedQuiz() {
     }
 
     if (!questions || questions.length === 0) {
-        alert(`${quizSelection.eraName}【${quizSelection.levelName}】の ${quizSelection.trialName} データがまだ存在しません。`);
+        alert(`${quizSelection.eraName}【${quizSelection.levelName}】の ${quizSelection.trialName} データが存在しません。`);
         goToQuizMenuStep('trial');
         return;
     }
@@ -464,12 +771,16 @@ async function startSelectedQuiz() {
     renderCurrentQuestion();
 }
 
-// 1問ごとのレンダリング（3形式動的マウント）
+// 1問ごとの制限時間（time_limit）反映 ＆ 動的UI
 function renderCurrentQuestion() {
     const session = currentQuizSession;
     const q = session.questions[session.currentIndex];
     session.isLocked = false;
-    session.timeRemaining = session.perQuestionTime;
+
+    // ★ CSVの time_limit 列があればその秒数、なければ15秒
+    const limitSec = (q.time_limit && !isNaN(parseFloat(q.time_limit))) ? parseFloat(q.time_limit) : 15.0;
+    session.perQuestionTime = limitSec;
+    session.timeRemaining = limitSec;
 
     document.getElementById('quiz-progress-text').innerText = `第 ${session.currentIndex + 1} / ${session.questions.length} 問`;
     document.getElementById('quiz-question-text').innerText = q.question;
@@ -573,14 +884,23 @@ function startQuestionTimer(currentQuestion) {
     }, interval);
 }
 
+// 分:秒 フォーマット対応タイマーUI
 function updateTimerUI() {
     const remain = Math.max(0, currentQuizSession.timeRemaining);
-    document.getElementById('quiz-timer').innerText = remain.toFixed(2);
+    const minutes = Math.floor(remain / 60);
+    const seconds = (remain % 60);
+
+    const timeText = minutes > 0 
+        ? `${minutes}:${seconds < 10 ? '0' : ''}${seconds.toFixed(1)}`
+        : remain.toFixed(2);
+
+    document.getElementById('quiz-timer').innerText = timeText;
+
     const pct = (remain / currentQuizSession.perQuestionTime) * 100;
     const bar = document.getElementById('quiz-timer-bar');
     if (bar) {
         bar.style.width = `${pct}%`;
-        bar.className = pct < 30 ? "bg-rose-500 h-full w-full transition-all" : "bg-amber-500 h-full w-full transition-all";
+        bar.className = pct < 25 ? "bg-rose-500 h-full w-full transition-all" : "bg-amber-500 h-full w-full transition-all";
     }
 }
 
@@ -620,7 +940,9 @@ function submitAnswer(isCorrect, questionItem, isTimeout = false) {
     }, 1300);
 }
 
-// リザルト画面 ＆ カード報酬・覚醒スワップ処理
+// ==========================================
+// 6. リザルト画面 ＆ CSV指定の報酬付与・覚醒置換
+// ==========================================
 function showQuizResult() {
     const session = currentQuizSession;
     const resultView = document.getElementById('quiz-result-view');
@@ -634,13 +956,17 @@ function showQuizResult() {
 
     if (isPerfect) {
         const progressData = getQuizProgress();
-        const eraProg = progressData[quizSelection.era];
-        const lvlProg = eraProg[quizSelection.level];
-        const cardInfo = NARA_CARD_REWARDS[quizSelection.level];
+        if (!progressData[quizSelection.era]) progressData[quizSelection.era] = {};
+        if (!progressData[quizSelection.era][quizSelection.level]) {
+            progressData[quizSelection.era][quizSelection.level] = { stagesCleared: 0, loops: 0, randomCleared: false, randomLoops: 0 };
+        }
+        const lvlProg = progressData[quizSelection.era][quizSelection.level];
+        const masterRow = quizSelection.levelRow;
+        const totalStages = quizSelection.dynamicStages?.length || 3;
 
         if (quizSelection.trialType === 'fixed') {
             lvlProg.stagesCleared = Math.max(lvlProg.stagesCleared, quizSelection.trial);
-            if (lvlProg.stagesCleared >= (quizSelection.levelData?.stages || 3)) {
+            if (lvlProg.stagesCleared >= totalStages) {
                 lvlProg.cleared = true;
                 lvlProg.loops = (lvlProg.loops || 0) + 1;
             }
@@ -651,27 +977,27 @@ function showQuizResult() {
 
         saveQuizProgress(progressData);
 
-        // ① 初回満点クリア報酬（通常カード付与）
-        if (cardInfo) {
-            const isFirst = grantNormalRewardCard(cardInfo.normalId, cardInfo.name);
+        // ① 初回満点クリア報酬（quiz_master.csv の reward_normal_id を直接使用）
+        if (masterRow && masterRow.reward_normal_id) {
+            const isFirst = grantNormalRewardCard(masterRow.reward_normal_id, masterRow.reward_name);
             if (isFirst) {
-                rewardHtml += `<div class="text-amber-300 font-bold text-base sm:text-lg animate-bounce">【初制覇報酬】カード『${cardInfo.name}』獲得！</div>`;
+                rewardHtml += `<div class="text-amber-300 font-bold text-base sm:text-lg animate-bounce">【初制覇報酬】カード『${masterRow.reward_name}』獲得！</div>`;
             }
         }
 
-        // ② 10周完走時（進捗100%）の覚醒カードIDスワップ
-        const fixedCleared = Math.min(quizSelection.levelData?.stages || 3, lvlProg.stagesCleared || 0);
+        // ② 10周完走時（進捗100%）の覚醒置換（quiz_master.csv の reward_awk_id を直接使用）
+        const fixedCleared = Math.min(totalStages, lvlProg.stagesCleared || 0);
         const loopDone = Math.min(10, lvlProg.loops || 0) + Math.min(10, lvlProg.randomLoops || 0);
         const randomCleared = lvlProg.randomCleared ? 1 : 0;
         const totalSum = fixedCleared + loopDone + randomCleared;
-        const totalReq = (quizSelection.levelData?.stages || 3) + 10 + 1 + 10;
+        const totalReq = totalStages + 10 + 1 + 10;
 
-        if (cardInfo && totalSum >= totalReq) {
-            const justAwakened = replaceWithAwakenedCard(cardInfo.normalId, cardInfo.awakenedId, cardInfo.name);
+        if (masterRow && masterRow.reward_awk_id && totalSum >= totalReq) {
+            const justAwakened = replaceWithAwakenedCard(masterRow.reward_normal_id, masterRow.reward_awk_id, masterRow.reward_name);
             if (justAwakened) {
                 rewardHtml += `
                     <div class="mt-2 p-2 bg-gradient-to-r from-amber-600/50 via-yellow-400/60 to-amber-600/50 border border-yellow-300 rounded-lg text-yellow-100 font-bold text-xs sm:text-sm tracking-wider animate-pulse shadow-lg">
-                        ★ 典学極致：『${cardInfo.name}』が覚醒し、真の姿へと昇華した！ ★
+                        ★ 典学極致：『${masterRow.reward_name}』が覚醒し、真の姿へと昇華した！ ★
                     </div>
                 `;
             }
@@ -699,45 +1025,18 @@ function openQuizModal() {
     ensureQuizModalDOM();
     const modal = document.getElementById('quiz-modal');
     if (modal) modal.classList.remove('hidden');
-    switchQuizBGM(true); // ★ ここを追加（クイズBGM再生開始）
+    switchQuizBGM(true);
     showView('title');
 }
 
 function closeQuizModal() {
-    if (typeof currentQuizSession !== 'undefined' && currentQuizSession.timer) {
+    if (typeof currentQuizSession !== 'undefined' && currentQuizSession && currentQuizSession.timer) {
         clearInterval(currentQuizSession.timer);
     }
     const modal = document.getElementById('quiz-modal');
     if (modal) modal.classList.add('hidden');
     closeQuizConfirmDialog();
-    switchQuizBGM(false); // ★ ここを追加（タイトルBGM再開）
-}
-
-
-// ==========================================
-// BGM切り替え制御
-// ==========================================
-function switchQuizBGM(startQuiz) {
-    const titleBgm = document.getElementById('bgm-title');
-    const quizBgm = document.getElementById('bgm-quiz');
-
-    if (startQuiz) {
-        // タイトルBGMを一時停止し、クイズBGMを再生
-        if (titleBgm && !titleBgm.paused) {
-            titleBgm.pause();
-            titleBgm.dataset.wasPlaying = 'true';
-        }
-        if (quizBgm) {
-            quizBgm.currentTime = 0;
-            quizBgm.play().catch(e => console.warn("クイズBGM再生失敗:", e));
-        }
-    } else {
-        // クイズBGMを止め、タイトルBGMを再開
-        if (quizBgm) quizBgm.pause();
-        if (titleBgm && titleBgm.dataset.wasPlaying === 'true') {
-            titleBgm.play().catch(e => console.warn("タイトルBGM再開失敗:", e));
-        }
-    }
+    switchQuizBGM(false);
 }
 
 // グローバル公開
@@ -749,4 +1048,3 @@ window.openQuizConfirmDialog = openQuizConfirmDialog;
 window.closeQuizConfirmDialog = closeQuizConfirmDialog;
 window.executeQuizStartCountdown = executeQuizStartCountdown;
 window.restartCurrentTrial = restartCurrentTrial;
-

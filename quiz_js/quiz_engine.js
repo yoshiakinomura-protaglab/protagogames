@@ -1,8 +1,11 @@
 /**
- * js/quiz/quiz_engine.js - 典学モード 出題進行 ＆ 3形式判定エンジン
+ * js/quiz/quiz_engine.js - 典学モード 出題進行 ＆ マスターCSV駆動判定エンジン
  */
 
+let quizMasterData = []; // quiz_master.csv のキャッシュ
+
 let cachedQuizData = {
+    csvPath: '',
     allLevelQuestions: []
 };
 
@@ -37,28 +40,89 @@ function parseQuizCSV(csvText) {
     return result;
 }
 
-// 等級内CSVの全ロード
-async function loadLevelQuizData(era = 'nara', level = 'basic') {
-    const fileName = `quiz/quiz_${era}_${level}.csv`;
+// 1. マスターCSVのロード
+async function loadQuizMasterCSV() {
+    if (quizMasterData.length > 0) return quizMasterData;
     try {
-        const res = await fetch(fileName);
+        const res = await fetch('quiz/quiz_master.csv');
+        if (!res.ok) throw new Error("quiz_master.csv が取得できません");
         const text = await res.text();
-        const data = parseQuizCSV(text);
-        cachedQuizData.allLevelQuestions = data;
-        return data;
+        quizMasterData = parseQuizCSV(text);
+        return quizMasterData;
     } catch (e) {
-        console.error(`[Quiz] ${fileName} のロードに失敗:`, e);
+        console.error("[Quiz] マスターCSVロード失敗:", e);
         return [];
     }
 }
 
-// 固定試練（パッケージ）の抽出
+// 公開対象（is_active === "1"）の時代一覧を取得
+function getActiveErasFromMaster() {
+    const activeRows = quizMasterData.filter(r => r.is_active === "1");
+    const eraMap = new Map();
+    activeRows.forEach(r => {
+        if (!eraMap.has(r.era_id)) {
+            eraMap.set(r.era_id, {
+                id: r.era_id,
+                name: r.era_name,
+                order: parseInt(r.era_order, 10) || 99,
+                banner: r.era_banner || `images/quiz_${r.era_id}_banner.jpg`
+            });
+        }
+    });
+    return Array.from(eraMap.values()).sort((a, b) => a.order - b.order);
+}
+
+// 特定の時代の公開等級一覧を取得
+function getActiveLevelsForEra(eraId) {
+    return quizMasterData
+        .filter(r => r.era_id === eraId && r.is_active === "1")
+        .sort((a, b) => (parseInt(a.level_order, 10) || 0) - (parseInt(b.level_order, 10) || 0));
+}
+
+// 2. 指定された問題CSVのロード（キャッシュ管理）
+async function loadTargetQuizCSV(csvPath) {
+    if (cachedQuizData.csvPath === csvPath && cachedQuizData.allLevelQuestions.length > 0) {
+        return cachedQuizData.allLevelQuestions;
+    }
+
+    try {
+        const res = await fetch(csvPath);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const text = await res.text();
+        const data = parseQuizCSV(text);
+        cachedQuizData = {
+            csvPath: csvPath,
+            allLevelQuestions: data
+        };
+        return data;
+    } catch (e) {
+        console.error(`[Quiz] ${csvPath} の取得失敗:`, e);
+        cachedQuizData = { csvPath: csvPath, allLevelQuestions: [] };
+        return [];
+    }
+}
+
+// CSVからステージ構成（試練番号・形式）を動的解析して取得
+function getLevelStageInfo() {
+    const questions = cachedQuizData.allLevelQuestions || [];
+    const packageIds = [...new Set(questions.map(q => parseInt(q.package_id, 10)).filter(n => !isNaN(n)))].sort((a, b) => a - b);
+    
+    if (packageIds.length === 0) return [];
+
+    return packageIds.map(pkgId => {
+        const firstQ = questions.find(q => parseInt(q.package_id, 10) === pkgId);
+        return {
+            stageNum: pkgId,
+            type: firstQ?.q_type || 'choice'
+        };
+    });
+}
+
 function getFixedPackageQuestions(pkgId) {
     return cachedQuizData.allLevelQuestions.filter(q => parseInt(q.package_id, 10) === parseInt(pkgId, 10))
                                           .sort((a, b) => parseInt(a.q_no, 10) - parseInt(b.q_no, 10));
 }
 
-// 昇段ランダム検定（全問から3形式混在で10問抽出）
 function getRandomExamQuestions() {
     const pool = [...cachedQuizData.allLevelQuestions];
     for (let i = pool.length - 1; i > 0; i--) {
@@ -68,20 +132,16 @@ function getRandomExamQuestions() {
     return pool.slice(0, 10);
 }
 
-// 文字列ゆらぎ正規化（全角半角・カタカナひらがな・空白除去）
+// 文字ゆらぎ正規化
 function normalizeAnswerString(str) {
     if (!str) return '';
     let s = str.trim().toLowerCase();
-    // 全角英数を半角へ
     s = s.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-    // カタカナをひらがなへ変換
     s = s.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
-    // 空白の完全除去
     s = s.replace(/\s+/g, '');
     return s;
 }
 
-// 四択シャッフル
 function getShuffledChoices(q) {
     const choices = [
         { text: q.choice1, isCorrect: true },
@@ -104,19 +164,29 @@ function judgeUserAnswer(userInput, questionItem) {
         return userInput === true;
     } else if (qType === 'input') {
         const normUser = normalizeAnswerString(userInput);
-        // answer列にカンマ区切りで複数別解がある場合にも対応
         const validAnswers = (questionItem.answer || questionItem.choice1 || '')
             .split(',')
             .map(a => normalizeAnswerString(a));
         return validAnswers.includes(normUser);
     } else if (qType === 'desc') {
         const normUser = normalizeAnswerString(userInput);
-        // 必須キーワード（choice2などに格納、またはanswerそのまま）の部分一致チェック
-        const keywords = (questionItem.choice2 || questionItem.answer || '')
-            .split(',')
+        let rawKeywords = [];
+        if (questionItem.keywords) {
+            rawKeywords = questionItem.keywords.split(',');
+        } else {
+            [questionItem.choice1, questionItem.choice2, questionItem.choice3, questionItem.choice4, questionItem.answer].forEach(val => {
+                if (val && val.trim()) rawKeywords.push(val);
+            });
+        }
+
+        const keywords = rawKeywords
             .map(k => normalizeAnswerString(k))
             .filter(k => k.length > 0);
-        return keywords.every(kw => normUser.includes(kw));
+
+        if (keywords.length === 0) return true;
+        const matchCount = keywords.filter(kw => normUser.includes(kw)).length;
+        const requiredCount = Math.max(1, Math.floor(keywords.length * 0.4));
+        return matchCount >= requiredCount;
     }
     return false;
 }
