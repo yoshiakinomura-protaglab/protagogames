@@ -1,5 +1,5 @@
 /**
- * settings_ui.js - ⚙️ 設定画面 & モーダルUI
+ * settings_ui.js - ⚙️ 設定画面 & モーダルUI（クイズ個別リセット＆全問9周クリアデバッグ完備版）
  */
 
 function initSettingsUI() {
@@ -44,7 +44,8 @@ function openSettingsModal() {
 
                 <h3 style="margin: 0 0 16px 0; color: #38bdf8; font-size: 18px; text-align: center;">⚙️ 設定 / データ管理</h3>
 
-                <div style="margin-bottom: 20px; background: #1e293b; padding: 12px; border-radius: 10px;">
+                <!-- 1. 起動モード選択 -->
+                <div style="margin-bottom: 16px; background: #1e293b; padding: 12px; border-radius: 10px;">
                     <div style="font-size: 13px; font-weight: bold; color: #f59e0b; margin-bottom: 8px;">🎮 起動モード選択</div>
                     <div style="display: flex; gap: 8px;">
                         <button id="btn-set-normal" style="
@@ -59,7 +60,8 @@ function openSettingsModal() {
                     </div>
                 </div>
 
-                <div style="margin-bottom: 20px; background: #1e293b; padding: 12px; border-radius: 10px;">
+                <!-- 2. セーブデータバックアップ -->
+                <div style="margin-bottom: 16px; background: #1e293b; padding: 12px; border-radius: 10px;">
                     <div style="font-size: 13px; font-weight: bold; color: #38bdf8; margin-bottom: 8px;">💾 セーブデータバックアップ</div>
                     <div style="display: flex; gap: 8px;">
                         <button id="btn-export-code" style="flex:1; padding:8px; background:#0284c7; color:#fff; border:none; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">コード出力</button>
@@ -67,11 +69,30 @@ function openSettingsModal() {
                     </div>
                 </div>
 
+                <!-- 3. クイズ（典学）専用デバッグ制御 -->
+                <div style="margin-bottom: 16px; background: #1e293b; padding: 12px; border-radius: 10px; border: 1px solid #d97706/50;">
+                    <div style="font-size: 13px; font-weight: bold; color: #fbbf24; margin-bottom: 8px;">📜 典学（クイズ）デバッグ設定</div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <!-- 通常試練10周・最終試練9周（覚醒直前状態） -->
+                        <button id="btn-set-quiz-9loops" style="
+                            width: 100%; padding: 8px; background: #78350f; border: 1px solid #f59e0b;
+                            color: #fef08a; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;
+                        ">⚡ 覚醒直前にセット（通常10周・最終試練9周）<br/><span style="font-size:9px; color:#fde68a;">(次回 最終試練クリアで覚醒演出テスト可能)</span></button>
+
+                        <!-- クイズ履歴のみ初期化 -->
+                        <button id="btn-reset-quiz-only" style="
+                            width: 100%; padding: 6px; background: none; border: 1px solid #d97706;
+                            color: #f59e0b; border-radius: 6px; font-size: 11px; cursor: pointer;
+                        ">🔄 クイズ履歴のみ初期化</button>
+                    </div>
+                </div>
+
+                <!-- 4. 全データ完全初期化 -->
                 <div style="text-align: center;">
                     <button id="btn-reset-data" style="
                         background: none; border: 1px solid #ef4444; color: #ef4444;
                         padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer;
-                    ">⚠️ データを初期化する</button>
+                    ">⚠️ 全データを初期化する</button>
                 </div>
             </div>
         </div>
@@ -96,22 +117,73 @@ function openSettingsModal() {
         if (input) importSaveData(input.trim());
     });
 
+    // ★ ① クイズ履歴のみリセット
+    document.getElementById('btn-reset-quiz-only').addEventListener('click', () => {
+        if (confirm("典学（クイズ）の修練記録・進行度のみを初期化しますか？\n（所持カード・デッキ・ストーリー進捗は維持されます）")) {
+            localStorage.removeItem('yamato_quiz_progress_v2'); // ★ 追加
+            localStorage.removeItem('yamato_quiz_progress');
+            localStorage.removeItem('yamato_quiz_progress_v1');
+
+            if (typeof saveQuizProgress === 'function') {
+                saveQuizProgress({});
+            }
+
+            alert("典学（クイズ）の修練履歴を初期化しました。");
+            location.reload();
+        }
+    });
+
+    // ★ ② 通常試練10周完走 ＆ 最終試練9周（覚醒直前）セット
+    document.getElementById('btn-set-quiz-9loops').addEventListener('click', async () => {
+        if (confirm("通常試練を10周済（極）、最終試練を9周済（あと1回で覚醒発動）に設定しますか？\n（所持カード等はそのまま維持されます）")) {
+            const eras = ['yayoi', 'kofun_asuka', 'nara', 'heian', 'kamakura', 'muromachi', 'sengoku', 'edo', 'bakumatsu'];
+            const levels = ['basic', 'normal', 'hard', 'master']; // quiz_master.csv のIDと一致
+
+            let progress = (typeof getQuizProgress === 'function') ? getQuizProgress() : {};
+
+            eras.forEach(era => {
+                if (!progress[era]) progress[era] = {};
+                levels.forEach(lvl => {
+                    progress[era][lvl] = {
+                        cleared: true,          // 等級クリア済（次等級アンロック）
+                        stagesCleared: 10,       // 全通常試練アンロック＆制覇
+                        loops: 10,              // ★ 通常試練：10周完走（カンスト・極）
+                        randomCleared: true,    // 最終試練アンロック済
+                        randomLoops: 9,         // ★ 最終試練：9周（次回クリアで全試練10周到達）
+                        isAwakened: false       // まだ覚醒演出は未発動
+                    };
+                });
+            });
+
+            // v2キーを含めて確実に保存
+            if (typeof saveQuizProgress === 'function') {
+                saveQuizProgress(progress);
+            }
+            localStorage.setItem('yamato_quiz_progress_v2', JSON.stringify(progress));
+            localStorage.setItem('yamato_quiz_progress', JSON.stringify(progress));
+
+            alert("デバッグ設定を適用しました！\n通常試練：10周済（極）\n最終試練：9周済\n\n【最終試練】を満点クリアすると覚醒演出が発動します。");
+            location.reload();
+        }
+    });
+
+    // 全データ初期化
     document.getElementById('btn-reset-data').addEventListener('click', () => {
-        if (confirm("本当にデータを初期化しますか？\n（ストーリー進捗・所持カード・デッキ設定がすべてクリアされます）")) {
-            // 1. 基本セーブデータの削除
+        if (confirm("本当に全データを初期化しますか？\n（ストーリー・クイズ修練録・所持カード・デッキ設定がすべて初期状態に戻ります）")) {
             localStorage.removeItem(STORAGE_KEYS.COLLECTION);
             localStorage.removeItem(STORAGE_KEYS.HERO);
-
-            // ★ 2. ストーリー進捗 ＆ 保存デッキデータの削除（追加）
             localStorage.removeItem('yamato_story_progress_v1');
             localStorage.removeItem('yamato_縁_saved_decks_v1');
+            localStorage.removeItem('yamato_quiz_progress');
+            localStorage.removeItem('yamato_quiz_progress_v1');
+            localStorage.removeItem('yamato_magatama');
+            localStorage.removeItem('user_magatama');
 
             if (typeof initDefaultCollection === 'function') {
                 initDefaultCollection();
             }
 
-            alert("初期化しました。タイトル画面に移動します。");
-            // ★ プロローグ・初期化からやり直せるようタイトルへ遷移
+            alert("すべてのデータを初期化しました。タイトル画面へ移動します。");
             window.location.href = 'title.html';
         }
     });
