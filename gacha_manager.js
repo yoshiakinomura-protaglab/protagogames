@@ -251,6 +251,15 @@ function showGachaStep(stepId) {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
+
+    // ★ 所持勾玉表示の最新化
+    if (typeof getMagatamaCount === 'function') {
+        const count = getMagatamaCount().toLocaleString();
+        document.querySelectorAll('.gacha-magatama-display').forEach(el => {
+            el.innerText = count;
+        });
+    }
+
     document.getElementById(stepId)?.classList.remove('hidden');
 }
 
@@ -262,9 +271,16 @@ function createGachaModalHTML() {
     <div id="gacha-master-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[80000] hidden select-none">
         <!-- STEP 1: ガチャ選択画面 -->
         <div id="step-select-gacha" class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 max-w-md w-11/12 text-center shadow-2xl space-y-4">
-            <h3 class="text-xl font-black text-amber-300 font-yuji border-b border-amber-500/30 pb-3">
-                <i class="fa-solid fa-gem text-amber-400"></i> ガチャ選択
-            </h3>
+            <!-- ★ 所持勾玉表示バッジを追加 -->
+            <div class="flex items-center justify-between border-b border-amber-500/30 pb-3">
+                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-amber-500/40 text-xs font-bold text-amber-300">
+                    <i class="fa-solid fa-gem text-amber-400"></i>
+                    <span>勾玉: <strong class="gacha-magatama-display text-yellow-300 font-mono">0</strong></span>
+                </div>
+                <h3 class="text-lg font-black text-amber-300 font-yuji">
+                    ガチャ選択
+                </h3>
+            </div>
             <div class="space-y-3">
                 <button onclick="startSelectTypeFor('normal')" class="w-full py-4 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 font-black text-base border border-amber-300 shadow-lg cursor-pointer hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
                     <i class="fa-solid fa-cards"></i> ノーマルガチャ
@@ -320,70 +336,70 @@ function createGachaModalHTML() {
             <div id="gacha-flash-overlay" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-500"></div>
         </div>
 
-        <!-- STEP 5: カードオープン ＆ 結果画面 -->
-        <div id="step-result" class="fixed inset-0 z-[85000] bg-slate-950/95 flex flex-col p-4 sm:p-8 hidden">
-            <div id="gacha-tap-notice" class="text-center py-2 text-yellow-300 font-black text-sm sm:text-base font-yuji animate-pulse">
+        <!-- STEP 5: カードオープン ＆ 結果画面 (スマホ/PC可変 ＆ ガタつき防止) -->
+        <div id="step-result" class="fixed inset-0 z-[85000] bg-slate-950/95 flex flex-col p-3 sm:p-6 hidden overflow-y-auto sm:overflow-hidden">
+            <div id="gacha-tap-notice" class="text-center py-1 text-yellow-300 font-black text-xs sm:text-base font-sans animate-pulse shrink-0">
                 ✨ カードをタップ！ ✨
             </div>
 
-            <div class="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 overflow-hidden my-2">
-                <div id="gacha-left-cards-container" class="w-full sm:w-1/2 h-full flex items-center justify-center p-2 overflow-y-auto">
+            <div class="flex-1 flex flex-col sm:flex-row items-stretch justify-between gap-4 sm:gap-6 my-2 max-w-7xl w-full mx-auto min-h-0">
+                
+                <!-- 左側：カード選択エリア -->
+                <div id="gacha-left-cards-container" class="w-full sm:w-1/2 shrink-0 sm:shrink flex items-center justify-center p-2 overflow-y-auto">
                 </div>
 
-                <!-- ★ 右側：カード詳細表示エリア（大判画像 ＋ ステータス ＋ 6枠タグ） -->
-                <div id="gacha-right-detail-container" class="w-full sm:w-1/2 h-full bg-slate-900/90 border-2 border-amber-500/50 rounded-2xl p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden">
+                <!-- 右側：カード詳細表示エリア -->
+                <div id="gacha-right-detail-container" class="w-full sm:w-1/2 bg-slate-900/90 border-2 border-amber-500/50 rounded-2xl p-4 sm:p-6 flex flex-col justify-between relative min-h-[360px] sm:min-h-0">
                     
-                    <div id="gacha-detail-placeholder" class="m-auto text-slate-500 font-bold text-sm">
+                    <div id="gacha-detail-placeholder" class="m-auto text-slate-500 font-bold text-xs sm:text-sm">
                         左側のカードを選択してください
                     </div>
                     
-                    <div id="gacha-detail-content" class="w-full h-full flex flex-col justify-between hidden">
+                    <div id="gacha-detail-content" class="w-full h-full flex flex-col justify-between hidden space-y-4">
                         
-                        <!-- 上部メイン：【左：大判カード画像】 ＋ 【右：基本ステータス】 -->
-                        <div class="flex flex-row items-center gap-5 sm:gap-6 flex-1 min-h-0">
+                        <!-- 上部メイン：PC用指定(sm:...)は完全維持、スマホ(初期)のみ flex-row(横並び)化 -->
+                        <div class="flex flex-row items-center justify-between gap-3 sm:gap-6 flex-1 min-h-0 my-auto">
                             
-                            <!-- 1. 左：どーんと大きく表示するカード画像（右エリアの大半を占有） -->
-                            <div class="w-1/2 max-w-[280px] aspect-[3/4] rounded-2xl border-2 border-amber-400 overflow-hidden shadow-[0_0_25px_rgba(245,158,11,0.35)] bg-slate-950 flex-shrink-0">
+                            <!-- 1. 左：カード画像（スマホ時も横に並び、縦4:横3比率を維持） -->
+                            <div class="w-32 sm:w-52 max-w-[40%] sm:max-w-[260px] aspect-[3/4] rounded-xl sm:rounded-2xl border-2 border-amber-400 overflow-hidden shadow-[0_0_25px_rgba(245,158,11,0.35)] bg-slate-950 shrink-0 mx-0 my-auto">
                                 <img id="gacha-detail-img" src="" class="w-full h-full object-cover object-top">
                             </div>
 
-                            <!-- 2. 右：カード基本ステータス（フォント超特大化） -->
-                            <div class="flex-1 flex flex-col justify-center space-y-4 text-left">
-                                <div class="border-b-2 border-amber-500/40 pb-3">
-                                    <h2 id="gacha-detail-name" class="text-3xl sm:text-4xl font-black text-yellow-300 font-yuji tracking-wider drop-shadow-md">---</h2>
+                            <!-- 2. 右：基本ステータス（スマホ文字サイズ最適化） -->
+                            <div class="flex-1 flex flex-col justify-center space-y-1.5 sm:space-y-3 text-left w-full min-w-0">
+                                <div class="border-b-2 border-amber-500/40 pb-1 sm:pb-2">
+                                    <h2 id="gacha-detail-name" class="text-base sm:text-4xl font-black text-yellow-300 font-yuji tracking-wider text-left truncate">---</h2>
                                 </div>
 
-                                <!-- 有名度 (Power) -->
-                                <div class="bg-slate-950/90 p-3.5 rounded-2xl border-2 border-amber-500/30 shadow-inner">
-                                    <div class="text-xs text-amber-400/90 font-black tracking-wider uppercase mb-1">有名度 (Power)</div>
-                                    <div id="gacha-detail-power" class="text-3xl sm:text-4xl font-black text-amber-300 font-mono tracking-tight drop-shadow">0</div>
+                                <!-- 有名度 (Power) ★ text-right で枠内右揃えに変更 -->
+                                <div class="bg-slate-950/90 p-3 rounded-2xl border-2 border-amber-500/30">
+                                    <div class="text-[10px] sm:text-xs text-amber-400/90 font-black tracking-wider uppercase mb-0.5">有名度 (Power)</div>
+                                    <div id="gacha-detail-power" class="text-2xl sm:text-4xl font-black text-amber-300 font-mono tracking-tight text-right pr-2">0</div>
                                 </div>
 
                                 <!-- じゃんけん手 ＆ ポーカー手 -->
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div class="bg-slate-950/90 p-3 rounded-2xl border border-slate-800 text-center shadow-md">
-                                        <div class="text-xs text-slate-400 font-bold mb-1">じゃんけん</div>
-                                        <div id="gacha-detail-janken" class="text-lg sm:text-xl font-black text-amber-300">---</div>
+                                <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                                    <div class="bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800 text-center">
+                                        <div class="text-[10px] sm:text-xs text-slate-400 font-bold mb-0.5">じゃんけん</div>
+                                        <div id="gacha-detail-janken" class="text-base sm:text-xl font-black text-amber-300">---</div>
                                     </div>
-                                    <div class="bg-slate-950/90 p-3 rounded-2xl border border-slate-800 text-center shadow-md">
-                                        <div class="text-xs text-slate-400 font-bold mb-1">ポーカー手</div>
-                                        <div id="gacha-detail-num" class="text-xl sm:text-2xl font-black text-amber-300 font-mono">---</div>
+                                    <div class="bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800 text-center">
+                                        <div class="text-[10px] sm:text-xs text-slate-400 font-bold mb-0.5">ポーカー手</div>
+                                        <div id="gacha-detail-num" class="text-lg sm:text-2xl font-black text-amber-300 font-mono">---</div>
                                     </div>
                                 </div>
                             </div>
 
                         </div>
 
-                        <!-- 3. 画像の下部：特性タグ用枠（最大6個固定枠） -->
-                        <div class="mt-4 pt-3 border-t border-amber-500/30 text-left">
+                        <!-- 3. 下部：特性タグ用枠（最大6個固定枠） -->
+                        <div class="pt-3 border-t border-amber-500/30 text-left">
                             <div class="text-xs font-bold text-amber-400/90 mb-2 flex items-center gap-1.5">
                                 <i class="fa-solid fa-tags text-amber-400"></i>
                                 <span>所持特性タグ（最大6枠）</span>
                             </div>
-                            
-                            <!-- 3列×2行で最大6個固定で並ぶタグコンテナ -->
-                            <div id="gacha-detail-tags" class="grid grid-cols-3 gap-2">
-                                <!-- JSで最大6枠生成 -->
+                            <div id="gacha-detail-tags" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                <!-- JSで動的生成 -->
                             </div>
                         </div>
 
@@ -391,10 +407,17 @@ function createGachaModalHTML() {
                 </div>
             </div>
 
-            <div id="gacha-footer-area" class="h-12 flex items-center justify-center">
-                <button id="btn-gacha-finish" onclick="closeGachaModal()" class="px-8 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 text-slate-950 font-black text-sm border border-amber-300 shadow-xl cursor-pointer transition-all hover:scale-105 active:scale-95 hidden">
-                    タイトルに戻る
-                </button>
+            <!-- ボタンエリア（高さ固定で画面ガタつき防止） -->
+            <div id="gacha-footer-area" class="h-14 flex items-center justify-center shrink-0 pt-1">
+                <div id="gacha-finish-buttons" class="flex items-center justify-center gap-3 transition-opacity duration-300 opacity-0 pointer-events-none">
+                    <button id="btn-gacha-retry" onclick="confirmRetryGacha()" class="px-5 sm:px-7 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 font-black text-xs sm:text-sm border border-amber-300 shadow-xl cursor-pointer hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span id="text-gacha-retry">もう一度引く</span>
+                    </button>
+                    <button id="btn-gacha-finish" onclick="closeGachaModal()" class="px-5 sm:px-7 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm border border-slate-700 shadow-xl cursor-pointer hover:scale-105 active:scale-95 transition-all">
+                        メニューに戻る
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -429,6 +452,15 @@ async function startGachaExecution() {
     if (!gachaCardsDb || gachaCardsDb.length === 0) {
         alert("カードデータの読み込みに失敗しました。");
         return;
+    }
+
+    // ★ 勾玉の消費・不足チェック
+    if (typeof consumeMagatamaForGacha === 'function') {
+        const result = consumeMagatamaForGacha(currentSelectedGachaType);
+        if (!result.success) {
+            alert(`勾玉が不足しています！\n（所持: ${result.current.toLocaleString()} 個 / 必要: ${result.cost.toLocaleString()} 個）`);
+            return;
+        }
     }
 
     // ① パーセントルールに基づいてカードを抽選
@@ -507,12 +539,17 @@ function setupGachaResultScreen() {
     const leftContainer = document.getElementById('gacha-left-cards-container');
     const rightPlaceholder = document.getElementById('gacha-detail-placeholder');
     const rightContent = document.getElementById('gacha-detail-content');
-    const finishBtn = document.getElementById('btn-gacha-finish');
+    const btnContainer = document.getElementById('gacha-finish-buttons');
 
     if (!leftContainer) return;
     rightPlaceholder?.classList.remove('hidden');
     rightContent?.classList.add('hidden');
-    finishBtn?.classList.add('hidden');
+    
+    // ボタン領域を透明化して初期化（ガタつき防止）
+    if (btnContainer) {
+        btnContainer.classList.remove('opacity-100');
+        btnContainer.classList.add('opacity-0', 'pointer-events-none');
+    }
 
     const isMulti = currentSelectedGachaType === 'multi';
 
@@ -542,7 +579,6 @@ function setupGachaResultScreen() {
                     <div class="absolute inset-0 w-full h-full rounded-xl border-2 bg-slate-950 backface-hidden ${auraClass}">
                         <img src="images/card_back.jpg" class="w-full h-full object-cover rounded-xl" onerror="this.onerror=null; this.src='images/default.jpg';">
                     </div>
-                    <!-- 表面 (めくり後) ★ 表面側にも ${auraClass} を付与 ＆ overflow-hiddenを外してフレアを外へあふれ出させる -->
                     <div class="absolute inset-0 w-full h-full rounded-xl border-2 bg-slate-900 backface-hidden rotate-y-180 ${auraClass}">
                         <img src="images/${getCardImageFileName(card)}" class="w-full h-full object-cover object-top rounded-xl" onerror="this.onerror=null; this.src='images/default.jpg';">
                     </div>
@@ -571,13 +607,42 @@ function openGachaCard(idx) {
         innerEl.classList.add('opened');
         openedCardCount++;
 
+        // ★ 全部めくり終わったら「もう一度引く」と「メニューに戻る」をふわっと表示
         if (openedCardCount >= currentGachaResults.length) {
             document.getElementById('gacha-tap-notice')?.classList.add('hidden');
-            document.getElementById('btn-gacha-finish')?.classList.remove('hidden');
+            
+            const btnContainer = document.getElementById('gacha-finish-buttons');
+            const retryText = document.getElementById('text-gacha-retry');
+
+            if (retryText) {
+                retryText.innerText = currentSelectedGachaType === 'multi' ? 'もう一度10連' : 'もう一度単発';
+            }
+
+            if (btnContainer) {
+                btnContainer.classList.remove('opacity-0', 'pointer-events-none');
+                btnContainer.classList.add('opacity-100');
+            }
         }
     }
 
     showGachaCardDetail(card);
+}
+
+// ★ 追加：「もう一度引く」ボタンタップ時に確認モーダルへ誘導する処理
+function confirmRetryGacha() {
+    const textEl = document.getElementById('gacha-confirm-text');
+    if (textEl) {
+        const typeName = currentSelectedGachaType === 'multi' ? '十連' : '単発';
+        textEl.innerText = `「ノーマルガチャ (${typeName})」をもう一度引きます。よろしいですか？`;
+    }
+
+    const btnContainer = document.getElementById('gacha-finish-buttons');
+    if (btnContainer) {
+        btnContainer.classList.remove('opacity-100');
+        btnContainer.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    showGachaStep('step-confirm');
 }
 
 function showGachaCardDetail(card) {
@@ -588,7 +653,6 @@ function showGachaCardDetail(card) {
     rightContent?.classList.remove('hidden');
 
     const imgEl = document.getElementById('gacha-detail-img');
-    const rankEl = document.getElementById('gacha-detail-rank');
     const nameEl = document.getElementById('gacha-detail-name');
     const jankenEl = document.getElementById('gacha-detail-janken');
     const numEl = document.getElementById('gacha-detail-num');
@@ -596,11 +660,11 @@ function showGachaCardDetail(card) {
     const tagsEl = document.getElementById('gacha-detail-tags');
 
     if (imgEl) imgEl.src = `images/${getCardImageFileName(card)}`;
-    if (rankEl) rankEl.innerText = `RANK: ${card.rank || '-'}`;
     if (nameEl) nameEl.innerText = card.name || '---';
 
     const jankenMap = { gu: '✊', cho: '✌️', pa: '✋' };
     if (jankenEl) jankenEl.innerText = jankenMap[card.janken] || card.janken || '---';
+    
     // ★ ポーカー手（cards.csv の rank 列を参照）
     if (numEl) numEl.innerText = card.rank || '---';
 
@@ -618,14 +682,13 @@ function showGachaCardDetail(card) {
             const tag = tagArr[i];
             if (tag) {
                 tagHtml += `
-                    <div class="bg-gradient-to-r from-amber-950/80 via-slate-950 to-amber-950/80 border-2 border-amber-500/60 py-2.5 px-3 rounded-2xl text-center text-sm sm:text-base font-black text-amber-200 shadow-lg shadow-amber-950/50 truncate flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-tag text-xs text-amber-400"></i>
+                    <div class="bg-gradient-to-r from-amber-950/80 via-slate-950 to-amber-950/80 border-2 border-amber-500/60 py-2 px-2.5 rounded-2xl text-center text-xs sm:text-sm font-black text-amber-200 shadow-md truncate flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-tag text-[10px] text-amber-400"></i>
                         <span>${tag}</span>
                     </div>`;
             } else {
-                // 空き枠
                 tagHtml += `
-                    <div class="bg-slate-950/40 border border-slate-800/50 py-2.5 px-3 rounded-2xl text-center text-sm font-bold text-slate-700 truncate">
+                    <div class="bg-slate-950/40 border border-slate-800/50 py-2 px-2.5 rounded-2xl text-center text-xs font-bold text-slate-700 truncate">
                         ---
                     </div>`;
             }
@@ -634,11 +697,12 @@ function showGachaCardDetail(card) {
     }
 }
 
-// グローバル公開
+// グローバル公開（confirmRetryGacha を追加）
 window.openGachaSelectModal = openGachaSelectModal;
 window.closeGachaModal = closeGachaModal;
 window.startSelectTypeFor = startSelectTypeFor;
 window.selectGachaType = selectGachaType;
 window.startGachaExecution = startGachaExecution;
 window.openGachaCard = openGachaCard;
+window.confirmRetryGacha = confirmRetryGacha;
 window.showGachaStep = showGachaStep;
