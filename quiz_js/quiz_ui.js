@@ -2,6 +2,14 @@
  * js/quiz/quiz_ui.js - 典学モード DOM自己生成 ＆ 画面制御（完全マスターCSV駆動版）
  */
 
+const QUIZ_ASSET_PATHS = {
+  questionFrame: 'images/quiz/quiz_frame_question.png', // 16:9
+  choiceFrame:   'images/quiz/quiz_frame_choice.png',   // 4.5:1
+  inputFrame:    'images/quiz/quiz_frame_input.png',    // 4.5:1
+  descFrame:     'images/quiz/quiz_frame_desc.png',     // 2.5:1
+  timerFrame:    'images/quiz/quiz_frame_timer.png'     // 1:1
+};
+
 // 木札画像アセット定義
 const QUIZ_TAG_ASSETS = {
     choice: {
@@ -130,43 +138,54 @@ function ensureQuizModalDOM() {
             <p class="text-stone-400 text-sm font-serif mt-6 tracking-widest">いざ、尋常に修練へ入らん――</p>
         </div>
 
-        <!-- 4. 出題画面 -->
-        <div id="quiz-view-battle" class="flex flex-col justify-between h-full w-full hidden">
-            <header class="w-full max-w-4xl mx-auto flex items-center justify-between border-b border-amber-900/60 pb-3">
+        <!-- 4. 出題画面（和風装飾・高品位版） -->
+        <div id="quiz-view-battle" class="flex flex-col justify-between h-full w-full max-w-4xl mx-auto px-2 sm:px-4 py-2 hidden relative z-20">
+            <!-- ヘッダー：左に進捗、右上に大型円形タイマー＆退出ボタン -->
+            <header class="w-full max-w-3xl mx-auto flex items-center justify-between pb-1 px-1 select-none">
+                <div class="flex items-center space-x-2 sm:space-x-3">
+                    <span id="quiz-title-badge" class="px-3 py-1 bg-gradient-to-r from-amber-950 to-stone-900 border border-amber-600/70 text-amber-300 font-serif font-black text-xs sm:text-sm tracking-widest rounded-lg shadow-md"></span>
+                    <span id="quiz-progress-text" class="text-stone-300 font-serif text-xs sm:text-sm font-semibold tracking-wider"></span>
+                </div>
+                
                 <div class="flex items-center space-x-3">
-                    <span id="quiz-title-badge" class="px-3 py-1 bg-amber-950/80 border border-amber-600/60 text-amber-300 font-bold text-sm tracking-widest rounded shadow"></span>
-                    <span id="quiz-progress-text" class="text-stone-400 font-serif text-sm sm:text-base font-semibold"></span>
+                    <!-- ① タイマー文字を1サイズ縮小（text-base sm:text-lg） -->
+                    <div class="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center shrink-0 drop-shadow-xl">
+                        <img src="${QUIZ_ASSET_PATHS.timerFrame}" class="absolute inset-0 w-full h-full object-contain pointer-events-none z-0">
+                        <span id="quiz-timer" class="relative z-10 font-serif font-black text-stone-900 text-base sm:text-lg tracking-tighter">15.00</span>
+                    </div>
+
+                    <button onclick="closeQuizModal()" class="px-3 py-1.5 bg-stone-900/90 hover:bg-rose-950/80 border border-stone-700 hover:border-rose-500/80 text-stone-300 hover:text-rose-200 rounded-lg text-xs sm:text-sm transition duration-150 cursor-pointer shadow">
+                        <i class="fa-solid fa-person-walking-arrow-right mr-1"></i>退出
+                    </button>
                 </div>
-                <div class="flex items-center space-x-2 bg-stone-900/80 px-4 py-1.5 rounded-full border border-amber-800/50 shadow-inner">
-                    <i class="fa-solid fa-stopwatch text-amber-400 text-base animate-pulse"></i>
-                    <span id="quiz-timer" class="font-mono text-lg sm:text-xl font-bold text-amber-300 w-20 text-center">15.00</span>
-                </div>
-                <button onclick="closeQuizModal()" class="px-3 py-1 bg-stone-900/90 border border-stone-700 hover:border-rose-500/80 text-stone-300 hover:text-rose-300 rounded text-sm transition">
-                    <i class="fa-solid fa-person-walking-arrow-right mr-1"></i>退出
-                </button>
             </header>
 
-            <div class="w-full max-w-4xl mx-auto bg-stone-900 h-2 rounded-full overflow-hidden border border-stone-800 my-2">
-                <div id="quiz-timer-bar" class="bg-amber-500 h-full w-full transition-all duration-75"></div>
+            <!-- ② タイムバー（問題枠の上に長く配置） -->
+            <div class="w-full max-w-3xl mx-auto bg-stone-950/90 h-2 sm:h-2.5 rounded-full overflow-hidden border border-amber-900/80 my-1.5 shadow-inner relative">
+                <div id="quiz-timer-bar" class="h-full w-full bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 transition-all duration-75"></div>
             </div>
 
-            <main class="w-full max-w-3xl mx-auto flex-1 flex flex-col justify-center py-2 sm:py-6">
-                <div class="bg-stone-900/90 border-2 border-amber-800/60 rounded-2xl p-6 sm:p-8 shadow-2xl mb-4 relative overflow-hidden">
-                    <div id="quiz-type-indicator" class="absolute top-3 left-4 px-2 py-0.5 rounded text-[11px] font-bold border"></div>
-                    <p id="quiz-question-text" class="text-lg sm:text-2xl font-serif font-bold text-stone-100 leading-relaxed text-center min-h-[70px] flex items-center justify-center pt-2">
-                        読み込み中...
-                    </p>
+            <!-- メイン出題・回答エリア -->
+            <main class="w-full flex-1 flex flex-col justify-center py-1 overflow-y-auto no-scrollbar">
+                <!-- ③ 問題表示枠 (16:9 和紙有効矩形を正確に指定) -->
+                <div class="relative w-full max-w-3xl mx-auto aspect-video mb-3 flex items-center justify-center drop-shadow-2xl select-none">
+                    <img src="${QUIZ_ASSET_PATHS.questionFrame}" class="absolute inset-0 w-full h-full object-contain pointer-events-none z-0">
+                    
+                    <!-- 文鎮の下から和紙下端までの有効領域（top:24%, bottom:8%, left:12%, right:12%） -->
+                    <div class="absolute top-[24%] bottom-[8%] left-[12%] right-[12%] z-10 flex flex-col items-center justify-center text-center overflow-hidden">
+                        <div id="quiz-question-text" class="w-full h-full flex flex-col items-center justify-center font-serif font-bold text-stone-900 text-sm sm:text-lg md:text-xl leading-relaxed select-none">
+                            読み込み中...
+                        </div>
+                    </div>
                 </div>
 
+                <!-- 回答マウント領域 -->
                 <div id="quiz-answer-mount" class="w-full"></div>
 
-                <div id="quiz-feedback-box" class="mt-4 p-4 rounded-xl border text-sm sm:text-base hidden transition shadow-lg">
-                    <div id="quiz-feedback-result" class="font-bold text-base sm:text-lg mb-1 flex items-center"></div>
-                    <div id="quiz-feedback-desc" class="text-stone-300 font-serif leading-relaxed"></div>
-                </div>
             </main>
 
-            <footer class="w-full max-w-4xl mx-auto text-center py-2 text-stone-500 text-xs tracking-widest font-serif">
+            <!-- フッター -->
+            <footer class="w-full text-center py-1 text-stone-500 text-[11px] tracking-[0.2em] font-serif border-t border-amber-950/40">
                 大和の縁 〜典学修練場〜
             </footer>
         </div>
@@ -771,67 +790,106 @@ async function startSelectedQuiz() {
     renderCurrentQuestion();
 }
 
-// 1問ごとの制限時間（time_limit）反映 ＆ 動的UI
 function renderCurrentQuestion() {
     const session = currentQuizSession;
     const q = session.questions[session.currentIndex];
     session.isLocked = false;
 
-    // ★ CSVの time_limit 列があればその秒数、なければ15秒
+    // 個別制限時間
     const limitSec = (q.time_limit && !isNaN(parseFloat(q.time_limit))) ? parseFloat(q.time_limit) : 15.0;
     session.perQuestionTime = limitSec;
     session.timeRemaining = limitSec;
 
     document.getElementById('quiz-progress-text').innerText = `第 ${session.currentIndex + 1} / ${session.questions.length} 問`;
-    document.getElementById('quiz-question-text').innerText = q.question;
-    document.getElementById('quiz-feedback-box').classList.add('hidden');
+    
+    // 和紙エリアの中身を純粋な問題文に初期化
+    const qTextEl = document.getElementById('quiz-question-text');
+    if (qTextEl) {
+        qTextEl.innerHTML = `<span class="leading-relaxed whitespace-pre-wrap">${q.question}</span>`;
+    }
 
     const mount = document.getElementById('quiz-answer-mount');
     mount.innerHTML = '';
 
-    const indicator = document.getElementById('quiz-type-indicator');
     const qType = q.q_type || 'choice';
-    const tagInfo = QUIZ_TAG_ASSETS[qType] || QUIZ_TAG_ASSETS.choice;
-    indicator.className = `absolute top-3 left-4 px-2 py-0.5 rounded text-[11px] font-bold border ${tagInfo.badgeColor}`;
-    indicator.innerText = tagInfo.name;
 
-    // A. 四択UI
+    // A. 四択UI（②左余白をml-[27%]に拡大 ＆ ③文字をtext-base sm:text-lgに拡大）
     if (qType === 'choice') {
         const grid = document.createElement('div');
-        grid.className = "grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4";
+        grid.className = "grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full max-w-3xl mx-auto";
         const choices = getShuffledChoices(q);
-        choices.forEach(ch => {
+        const choiceLabels = ['壱', '弐', '参', '肆'];
+
+        choices.forEach((ch, idx) => {
             const btn = document.createElement('button');
-            btn.className = "w-full py-4 sm:py-5 px-5 bg-stone-900/90 hover:bg-stone-800 active:scale-[0.98] border-2 border-amber-900/60 hover:border-amber-500 rounded-xl text-left text-base sm:text-xl font-serif font-bold text-stone-200 transition duration-150 flex items-center justify-between shadow-md";
-            btn.innerHTML = `<span>${ch.text}</span><i class="fa-solid fa-chevron-right text-stone-600 text-sm"></i>`;
-            btn.onclick = () => submitAnswer(ch.isCorrect, q);
+            btn.type = "button";
+            btn.className = "quiz-choice-item group relative w-full aspect-[4.5/1] flex items-center transition-all duration-200 active:scale-[0.98] outline-none cursor-pointer overflow-hidden";
+            btn.dataset.isCorrect = ch.isCorrect ? "true" : "false";
+
+            btn.innerHTML = `
+                <img src="${QUIZ_ASSET_PATHS.choiceFrame}" class="absolute inset-0 w-full h-full object-contain pointer-events-none z-0 group-hover:brightness-105">
+                
+                <!-- 左側正方形金枠の真ん中にセンタリング -->
+                <div class="absolute left-[3.5%] w-[15%] h-full flex items-center justify-center font-serif font-black text-amber-500/90 text-sm sm:text-base pointer-events-none z-10">
+                    ${choiceLabels[idx]}
+                </div>
+                
+                <!-- 右側和紙エリアの内側にテキストを配置 -->
+                <div class="relative z-10 w-full h-full ml-[27%] mr-[5%] flex items-center justify-start text-left pr-2">
+                    <span class="font-serif font-bold text-stone-900 text-base sm:text-lg line-clamp-2 leading-snug">
+                        ${ch.text}
+                    </span>
+                </div>
+            `;
+            btn.onclick = () => {
+                const judge = judgeUserAnswer(ch.isCorrect, q);
+                submitAnswer(judge.isCorrect, q, false, judge.feedback, idx);
+            };
             grid.appendChild(btn);
         });
-        mount.appendChild(grid);
+        mount.appendChild(grid); // 画面（#quiz-answer-mount）へ反映
 
     // B. 一問一答（直打ち）UI
     } else if (qType === 'input') {
         const wrap = document.createElement('div');
-        wrap.className = "flex flex-col sm:flex-row gap-3 w-full max-w-xl mx-auto";
+        wrap.className = "w-full max-w-3xl mx-auto px-4 flex justify-center";
         wrap.innerHTML = `
-            <input type="text" id="quiz-direct-input" placeholder="用語を入力（Enterで回答）" 
-                   class="flex-1 px-4 py-3.5 bg-stone-950 border-2 border-amber-800/80 focus:border-amber-400 rounded-xl text-amber-100 font-serif text-lg outline-none shadow-inner" autocomplete="off">
-            <button id="quiz-direct-submit" class="px-6 py-3.5 bg-amber-700 hover:bg-amber-600 active:scale-95 text-white font-serif font-bold rounded-xl border border-amber-500 shadow-lg transition">
-                回答する
-            </button>
+            <!-- 全体基準コンテナ -->
+            <div class="relative w-full max-w-2xl flex items-center justify-center select-none">
+                <!-- 短冊画像 -->
+                <img src="${QUIZ_ASSET_PATHS.inputFrame}" class="h-auto max-h-24 sm:max-h-28 object-contain block pointer-events-none drop-shadow-md" alt="短冊">
+
+                <!-- 独立操作レイヤー -->
+                <div class="absolute inset-0 pointer-events-none z-10">
+                    <!-- テキスト入力エリア（和紙内完全フィット） -->
+                    <div class="absolute left-[34%] right-[33%] top-[15%] bottom-[15%] pointer-events-auto flex items-center px-2">
+                        <input type="text" id="quiz-direct-input" placeholder="ここに入力..." 
+                               class="w-full bg-transparent border-none outline-none font-serif font-black text-stone-900 text-sm sm:text-base md:text-lg placeholder-stone-500/80 tracking-wider" 
+                               autocomplete="off">
+                    </div>
+
+                    <!-- 決定ボタン判定エリア（木札直上・透明クリック面） -->
+                    <button id="quiz-direct-submit" type="button" 
+                            class="absolute left-[64%] w-[5.8%] bottom-[13%] h-[34%] pointer-events-auto cursor-pointer active:scale-95 transition opacity-0" 
+                            title="決定">
+                    </button>
+                </div>
+            </div>
         `;
         mount.appendChild(wrap);
 
         const inputEl = document.getElementById('quiz-direct-input');
         const submitBtn = document.getElementById('quiz-direct-submit');
 
-        setTimeout(() => inputEl?.focus(), 50);
+        setTimeout(() => inputEl?.focus(), 100);
 
         const handleInputSubmit = () => {
             const val = inputEl.value;
             if (!val.trim()) return;
-            const isOk = judgeUserAnswer(val, q);
-            submitAnswer(isOk, q);
+            inputEl.disabled = true;
+            submitBtn.style.pointerEvents = 'none';
+            const judge = judgeUserAnswer(val, q);
+            submitAnswer(judge.isCorrect, q, false, judge.feedback);
         };
 
         submitBtn.onclick = handleInputSubmit;
@@ -839,30 +897,63 @@ function renderCurrentQuestion() {
             if (e.key === 'Enter') handleInputSubmit();
         };
 
-    // C. 記述UI
+    // C. 記述UI【本番確定版】
     } else if (qType === 'desc') {
         const wrap = document.createElement('div');
-        wrap.className = "flex flex-col gap-3 w-full max-w-xl mx-auto";
+        // 問題枠と全く同じ幅・配置
+        wrap.className = "w-full max-w-3xl mx-auto flex justify-center";
         wrap.innerHTML = `
-            <textarea id="quiz-desc-input" rows="3" placeholder="要点を簡潔に入力せよ" 
-                      class="w-full px-4 py-3 bg-stone-950 border-2 border-amber-800/80 focus:border-amber-400 rounded-xl text-amber-100 font-serif text-base outline-none shadow-inner resize-none"></textarea>
-            <button id="quiz-desc-submit" class="w-full py-3 bg-amber-700 hover:bg-amber-600 active:scale-95 text-white font-serif font-bold rounded-xl border border-amber-500 shadow-lg transition">
-                回答を提出
-            </button>
+            <!-- 全体基準コンテナ -->
+            <div class="relative w-full aspect-[2.5/1] flex items-center justify-center select-none">
+                <!-- 和紙記述画像 (コンテナ全域にフィット) -->
+                <img src="${QUIZ_ASSET_PATHS.descFrame}" class="absolute inset-0 w-full h-full object-fill pointer-events-none drop-shadow-lg" alt="記述用紙">
+
+                <!-- 独立操作レイヤー -->
+                <div class="absolute inset-0 pointer-events-none z-10">
+                    
+                    <!-- テキストエリア（和紙内完全フィット） -->
+                    <div class="absolute left-[22%] right-[22%] top-[10%] bottom-[30%] pointer-events-auto p-2 flex">
+                        <textarea id="quiz-desc-input" placeholder="ここに入力..." 
+                                  class="w-full h-full bg-transparent border-none outline-none resize-none font-serif font-bold text-stone-900 text-sm sm:text-base md:text-lg leading-relaxed placeholder-stone-600/90" 
+                                  maxlength="200"></textarea>
+                    </div>
+
+                    <!-- 文字数カウント -->
+                    <div id="quiz-desc-char-count" 
+                         class="absolute left-[22%] bottom-[18%] w-[15%] h-[10%] pointer-events-none font-serif font-bold text-xs text-stone-800 flex items-center">
+                        0 / 150 字
+                    </div>
+
+                    <!-- 「提出」ボタン判定エリア（木札直上・透明クリック面） -->
+                    <button id="quiz-desc-submit" type="button" 
+                            class="absolute right-[15%] bottom-[10%] w-[12%] h-[28%] pointer-events-auto cursor-pointer active:scale-95 transition opacity-0" 
+                            title="提出">
+                    </button>
+                </div>
+            </div>
         `;
         mount.appendChild(wrap);
 
         const descEl = document.getElementById('quiz-desc-input');
         const submitBtn = document.getElementById('quiz-desc-submit');
+        const countEl = document.getElementById('quiz-desc-char-count');
 
-        setTimeout(() => descEl?.focus(), 50);
+        descEl.oninput = () => {
+            countEl.innerText = `${descEl.value.length} / 150 字`;
+        };
 
-        submitBtn.onclick = () => {
+        setTimeout(() => descEl?.focus(), 100);
+
+        const handleDescSubmit = () => {
             const val = descEl.value;
             if (!val.trim()) return;
-            const isOk = judgeUserAnswer(val, q);
-            submitAnswer(isOk, q);
+            descEl.disabled = true;
+            submitBtn.style.pointerEvents = 'none';
+            const judge = judgeUserAnswer(val, q);
+            submitAnswer(judge.isCorrect, q, false, judge.feedback);
         };
+
+        submitBtn.onclick = handleDescSubmit;
     }
 
     startQuestionTimer(q);
@@ -884,136 +975,164 @@ function startQuestionTimer(currentQuestion) {
     }, interval);
 }
 
-// 分:秒 フォーマット対応タイマーUI
 function updateTimerUI() {
     const remain = Math.max(0, currentQuizSession.timeRemaining);
     const minutes = Math.floor(remain / 60);
-    const seconds = (remain % 60);
+    const seconds = Math.floor(remain % 60);
 
-    const timeText = minutes > 0 
-        ? `${minutes}:${seconds < 10 ? '0' : ''}${seconds.toFixed(1)}`
-        : remain.toFixed(2);
-
-    document.getElementById('quiz-timer').innerText = timeText;
-
-    const pct = (remain / currentQuizSession.perQuestionTime) * 100;
+    const formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const timerEl = document.getElementById('quiz-timer');
     const bar = document.getElementById('quiz-timer-bar');
+
+    if (timerEl) {
+        timerEl.innerText = formatted;
+        const ratio = remain / currentQuizSession.perQuestionTime;
+        if (ratio <= 0.25) {
+            timerEl.className = "relative z-10 font-serif font-black text-red-700 text-base sm:text-lg tracking-tighter animate-pulse";
+        } else {
+            timerEl.className = "relative z-10 font-serif font-black text-stone-900 text-base sm:text-lg tracking-tighter";
+        }
+    }
+
+    // ② タイムバーの幅と警告色を更新
     if (bar) {
+        const pct = (remain / currentQuizSession.perQuestionTime) * 100;
         bar.style.width = `${pct}%`;
-        bar.className = pct < 25 ? "bg-rose-500 h-full w-full transition-all" : "bg-amber-500 h-full w-full transition-all";
+
+        if (pct <= 25) {
+            bar.className = "h-full w-full bg-gradient-to-r from-rose-700 via-red-500 to-rose-400 transition-all";
+        } else if (pct <= 50) {
+            bar.className = "h-full w-full bg-gradient-to-r from-orange-600 via-amber-500 to-yellow-400 transition-all";
+        } else {
+            bar.className = "h-full w-full bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 transition-all";
+        }
     }
 }
 
-function submitAnswer(isCorrect, questionItem, isTimeout = false) {
+/**
+ * quiz_ui.js の回答送信・フィードバック・次へボタン制御部分
+ */
+
+function submitAnswer(isCorrect, questionItem, isTimeout = false, feedbackDetail = '', selectedIndex = null) {
     if (currentQuizSession.isLocked) return;
     currentQuizSession.isLocked = true;
     clearInterval(currentQuizSession.timer);
 
-    const feedbackBox = document.getElementById('quiz-feedback-box');
-    const resultText = document.getElementById('quiz-feedback-result');
-    const descText = document.getElementById('quiz-feedback-desc');
-    feedbackBox.classList.remove('hidden');
-
-    const correctAnswerStr = questionItem.choice1 || questionItem.answer || "";
-
     if (isCorrect) {
         currentQuizSession.score++;
-        feedbackBox.className = "mt-4 p-4 rounded-xl border border-emerald-600 bg-emerald-950/70 text-stone-200 shadow-lg";
-        resultText.innerHTML = `<span class="text-emerald-400 text-lg"><i class="fa-solid fa-circle-check mr-2"></i>正解</span>`;
+    }
+
+    // 1. 四択ボタンの発光・グレーアウト制御
+    const choiceButtons = document.querySelectorAll('.quiz-choice-item');
+    if (choiceButtons.length > 0) {
+        choiceButtons.forEach((btn, idx) => {
+            btn.style.pointerEvents = 'none'; // クリック無効化
+            const isThisCorrect = btn.dataset.isCorrect === "true";
+            const isThisSelected = (selectedIndex !== null && idx === selectedIndex);
+
+            if (isThisCorrect) {
+                // 正解札：青く発光
+                btn.className = "quiz-choice-item relative w-full aspect-[4.5/1] flex items-center outline-none overflow-hidden ring-2 ring-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.9)] brightness-115 rounded-lg z-20 scale-[1.02] transition-all duration-300";
+            } else if (isThisSelected && !isCorrect) {
+                // 誤答札：赤く発光
+                btn.className = "quiz-choice-item relative w-full aspect-[4.5/1] flex items-center outline-none overflow-hidden ring-2 ring-rose-600 drop-shadow-[0_0_15px_rgba(225,29,72,0.9)] brightness-115 rounded-lg z-20 scale-[1.02] transition-all duration-300";
+            } else {
+                // その他札：グレーアウト
+                btn.className = "quiz-choice-item relative w-full aspect-[4.5/1] flex items-center outline-none overflow-hidden opacity-35 grayscale brightness-75 rounded-lg transition-all duration-300";
+            }
+        });
+    }
+
+    // 2. 和紙（問題表示枠）の内部を「問題・結果・解説・次へ」に統合
+    const qTextEl = document.getElementById('quiz-question-text');
+    const correctAnswerStr = questionItem.choice1 || questionItem.answer || "";
+
+   let resultBadgeHtml = '';
+    if (isCorrect) {
+        resultBadgeHtml = `
+            <div class="flex items-center justify-center text-emerald-800 font-serif font-black text-base sm:text-xl tracking-widest">
+                <i class="fa-solid fa-circle-check mr-2 text-lg sm:text-2xl text-emerald-700"></i>正解！
+                ${feedbackDetail ? `<span class="text-xs font-normal ml-2 text-emerald-900">${feedbackDetail}</span>` : ''}
+            </div>
+        `;
     } else {
-        feedbackBox.className = "mt-4 p-4 rounded-xl border border-rose-600 bg-rose-950/70 text-stone-200 shadow-lg";
         const reason = isTimeout ? "時間切れ！" : "不正解...";
-        resultText.innerHTML = `
-            <span class="text-rose-400 text-lg"><i class="fa-solid fa-circle-xmark mr-2"></i>${reason}</span>
-            <span class="ml-3 text-sm text-stone-300">正解: <strong class="text-amber-300 font-serif">${correctAnswerStr}</strong></span>
+        resultBadgeHtml = `
+            <div class="flex items-center justify-center text-rose-800 font-serif font-black text-base sm:text-xl tracking-widest">
+                <i class="fa-solid fa-circle-xmark mr-2 text-lg sm:text-2xl text-rose-700"></i>${reason}
+                ${feedbackDetail ? `<span class="text-xs font-normal ml-2 text-rose-900">${feedbackDetail}</span>` : ''}
+            </div>
         `;
     }
-    descText.innerText = questionItem.explanation || "";
+
+    if (qTextEl) {
+        qTextEl.innerHTML = `
+            <div class="w-full h-full flex flex-col justify-between text-stone-900 select-none py-0.5">
+                <!-- ① 正解・不正解（上部・1行） -->
+                <div class="shrink-0 pb-1 border-b border-stone-400/60">
+                    ${resultBadgeHtml}
+                </div>
+
+                <!-- ② 問題（中央上・和紙の幅いっぱいに中央揃え） -->
+                <div class="flex-1 flex items-center justify-center px-4 py-1 text-center overflow-y-auto no-scrollbar">
+                    <p class="font-serif font-bold text-stone-900 text-xs sm:text-sm md:text-base leading-snug">
+                        <span class="text-amber-900/80 mr-1 font-bold">【問】</span>${questionItem.question}
+                    </p>
+                </div>
+
+                <hr class="border-t border-stone-400/60 w-full shrink-0">
+
+                <!-- ③ 解説（中央下・横幅全開で自然に全文表示） -->
+                <div class="flex-1 flex items-center justify-start px-4 py-1 text-left overflow-y-auto no-scrollbar">
+                    <p class="font-serif text-xs sm:text-sm md:text-base text-sky-950 font-medium leading-relaxed">
+                        <span class="text-cyan-800 font-bold mr-1">【解説】</span>${questionItem.explanation || '解説はありません。'}
+                    </p>
+                </div>
+
+                <!-- ④ 次へボタン（最下段・右寄せ独立バー：インライン確定版） -->
+                <div class="shrink-0 pt-0.5 flex justify-end px-2">
+                    <button id="quiz-btn-next-question" onclick="proceedToNextQuestion()" 
+                            style="background: linear-gradient(to right, #92400e, #b45309, #92400e) !important; border: 1px solid #d97706 !important; color: #fef3c7 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4) !important;"
+                            class="px-5 py-1.5 active:scale-95 font-serif font-black text-xs sm:text-sm rounded-lg flex items-center gap-1.5 cursor-pointer transition">
+                        <span>次へ</span>
+                        <span style="font-family: sans-serif; font-size: 11px; transform: translateY(-0.5px);">➔</span>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
 
     setTimeout(() => {
-        currentQuizSession.currentIndex++;
-        if (currentQuizSession.currentIndex < currentQuizSession.questions.length) {
-            renderCurrentQuestion();
-        } else {
-            showQuizResult();
-        }
-    }, 1300);
+        document.getElementById('quiz-btn-next-question')?.focus();
+    }, 60);
+}
+
+// 「次へ進む」ボタン押下時の進行処理
+window.proceedToNextQuestion = function() {
+    currentQuizSession.currentIndex++;
+    if (currentQuizSession.currentIndex < currentQuizSession.questions.length) {
+        renderCurrentQuestion();
+    } else {
+        showQuizResult();
+    }
+};
+
+// 四択・直打ち・記述の回答ハンドラー更新
+// ※ judgeUserAnswer の戻り値 { isCorrect, feedback } を受け取って渡すように対応
+function handleAnswerSubmit(userInput, q) {
+    const judge = judgeUserAnswer(userInput, q);
+    submitAnswer(judge.isCorrect, q, false, judge.feedback);
 }
 
 // ==========================================
-// 6. リザルト画面 ＆ CSV指定の報酬付与・覚醒置換
+// 6. リザルト画面（quiz_result.js へ委譲）
 // ==========================================
 function showQuizResult() {
-    const session = currentQuizSession;
-    const resultView = document.getElementById('quiz-result-view');
-    const scoreText = document.getElementById('quiz-result-score');
-    const rewardText = document.getElementById('quiz-reward-text');
-
-    scoreText.innerText = `${session.questions.length}問中 ${session.score}問 正解`;
-
-    const isPerfect = session.score === session.questions.length;
-    let rewardHtml = '';
-
-    if (isPerfect) {
-        const progressData = getQuizProgress();
-        if (!progressData[quizSelection.era]) progressData[quizSelection.era] = {};
-        if (!progressData[quizSelection.era][quizSelection.level]) {
-            progressData[quizSelection.era][quizSelection.level] = { stagesCleared: 0, loops: 0, randomCleared: false, randomLoops: 0 };
-        }
-        const lvlProg = progressData[quizSelection.era][quizSelection.level];
-        const masterRow = quizSelection.levelRow;
-        const totalStages = quizSelection.dynamicStages?.length || 3;
-
-        if (quizSelection.trialType === 'fixed') {
-            lvlProg.stagesCleared = Math.max(lvlProg.stagesCleared, quizSelection.trial);
-            if (lvlProg.stagesCleared >= totalStages) {
-                lvlProg.cleared = true;
-                lvlProg.loops = (lvlProg.loops || 0) + 1;
-            }
-        } else if (quizSelection.trialType === 'random') {
-            lvlProg.randomCleared = true;
-            lvlProg.randomLoops = (lvlProg.randomLoops || 0) + 1;
-        }
-
-        saveQuizProgress(progressData);
-
-        // ① 初回満点クリア報酬（quiz_master.csv の reward_normal_id を直接使用）
-        if (masterRow && masterRow.reward_normal_id) {
-            const isFirst = grantNormalRewardCard(masterRow.reward_normal_id, masterRow.reward_name);
-            if (isFirst) {
-                rewardHtml += `<div class="text-amber-300 font-bold text-base sm:text-lg animate-bounce">【初制覇報酬】カード『${masterRow.reward_name}』獲得！</div>`;
-            }
-        }
-
-        // ② 10周完走時（進捗100%）の覚醒置換（quiz_master.csv の reward_awk_id を直接使用）
-        const fixedCleared = Math.min(totalStages, lvlProg.stagesCleared || 0);
-        const loopDone = Math.min(10, lvlProg.loops || 0) + Math.min(10, lvlProg.randomLoops || 0);
-        const randomCleared = lvlProg.randomCleared ? 1 : 0;
-        const totalSum = fixedCleared + loopDone + randomCleared;
-        const totalReq = totalStages + 10 + 1 + 10;
-
-        if (masterRow && masterRow.reward_awk_id && totalSum >= totalReq) {
-            const justAwakened = replaceWithAwakenedCard(masterRow.reward_normal_id, masterRow.reward_awk_id, masterRow.reward_name);
-            if (justAwakened) {
-                rewardHtml += `
-                    <div class="mt-2 p-2 bg-gradient-to-r from-amber-600/50 via-yellow-400/60 to-amber-600/50 border border-yellow-300 rounded-lg text-yellow-100 font-bold text-xs sm:text-sm tracking-wider animate-pulse shadow-lg">
-                        ★ 典学極致：『${masterRow.reward_name}』が覚醒し、真の姿へと昇華した！ ★
-                    </div>
-                `;
-            }
-        }
-
-        if (!rewardHtml) {
-            rewardHtml = `<span class="text-amber-300 font-bold">満点達成！修練の記録を更新した。</span>`;
-        }
-
-        if (window.addMagatamaDirect) addMagatamaDirect(500);
+    if (typeof showQuizResultScreen === 'function') {
+        showQuizResultScreen(currentQuizSession, quizSelection);
     } else {
-        rewardHtml = `<span class="text-stone-400">満点達成で進行度アップ！再挑戦しよう。</span>`;
+        console.error("quiz_result.js が読み込まれていません。");
     }
-
-    rewardText.innerHTML = rewardHtml;
-    resultView.classList.remove('hidden');
 }
 
 function restartCurrentTrial() {

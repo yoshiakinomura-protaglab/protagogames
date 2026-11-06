@@ -1,8 +1,8 @@
 /**
- * js/quiz/quiz_engine.js - 典学モード 出題進行 ＆ マスターCSV駆動判定エンジン
+ * js/quiz/quiz_engine.js - 典学モード 出題進行 ＆ 3形式判定エンジン（記述柔軟採点対応版）
  */
 
-let quizMasterData = []; // quiz_master.csv のキャッシュ
+let quizMasterData = [];
 
 let cachedQuizData = {
     csvPath: '',
@@ -40,7 +40,6 @@ function parseQuizCSV(csvText) {
     return result;
 }
 
-// 1. マスターCSVのロード
 async function loadQuizMasterCSV() {
     if (quizMasterData.length > 0) return quizMasterData;
     try {
@@ -55,7 +54,6 @@ async function loadQuizMasterCSV() {
     }
 }
 
-// 公開対象（is_active === "1"）の時代一覧を取得
 function getActiveErasFromMaster() {
     const activeRows = quizMasterData.filter(r => r.is_active === "1");
     const eraMap = new Map();
@@ -72,14 +70,12 @@ function getActiveErasFromMaster() {
     return Array.from(eraMap.values()).sort((a, b) => a.order - b.order);
 }
 
-// 特定の時代の公開等級一覧を取得
 function getActiveLevelsForEra(eraId) {
     return quizMasterData
         .filter(r => r.era_id === eraId && r.is_active === "1")
         .sort((a, b) => (parseInt(a.level_order, 10) || 0) - (parseInt(b.level_order, 10) || 0));
 }
 
-// 2. 指定された問題CSVのロード（キャッシュ管理）
 async function loadTargetQuizCSV(csvPath) {
     if (cachedQuizData.csvPath === csvPath && cachedQuizData.allLevelQuestions.length > 0) {
         return cachedQuizData.allLevelQuestions;
@@ -102,7 +98,6 @@ async function loadTargetQuizCSV(csvPath) {
     }
 }
 
-// CSVからステージ構成（試練番号・形式）を動的解析して取得
 function getLevelStageInfo() {
     const questions = cachedQuizData.allLevelQuestions || [];
     const packageIds = [...new Set(questions.map(q => parseInt(q.package_id, 10)).filter(n => !isNaN(n)))].sort((a, b) => a - b);
@@ -156,37 +151,99 @@ function getShuffledChoices(q) {
     return choices;
 }
 
-// 回答判定コア（四択・一問一答・記述共通）
+// ★ 記述式（技術問題）の二段階柔軟採点エンジン
+function judgeDescAnswer(userInput, questionItem) {
+    const normUser = normalizeAnswerString(userInput);
+    if (!normUser) return { isCorrect: false, feedback: "回答が空です。" };
+
+    // 1. 同義語辞書の展開（choice3: "安寧=安定/平和,建立=造営" など）
+    const synonymMap = new Map();
+    if (questionItem.choice3) {
+        questionItem.choice3.split(',').forEach(pair => {
+            const parts = pair.split('=');
+            if (parts.length === 2) {
+                const base = normalizeAnswerString(parts[0]);
+                const alts = parts[1].split('/').map(normalizeAnswerString);
+                synonymMap.set(base, alts);
+            }
+        });
+    }
+
+    // 単語照合ヘルパー（同義語も合致とみなす）
+    const containsTerm = (targetTerm) => {
+        const normTarget = normalizeAnswerString(targetTerm);
+        if (normUser.includes(normTarget)) return true;
+        const alts = synonymMap.get(normTarget);
+        if (alts && alts.some(alt => normUser.includes(alt))) return true;
+        return false;
+    };
+
+    // 【STEP 1: 必須用語チェック】（choice1）
+    const mustTerms = (questionItem.choice1 || '')
+        .split(',')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+
+    const missingTerms = mustTerms.filter(term => !containsTerm(term));
+    if (missingTerms.length > 0) {
+        return {
+            isCorrect: false,
+            feedback: `必須用語【${missingTerms.join('、')}】が不足しています。`
+        };
+    }
+
+    // 【STEP 2: 内容・論点要件チェック】（choice2）
+    // カンマ区切りの要点フレーズから重要単語を抽出し、意味のカバー率を判定
+    const contentReqs = (questionItem.choice2 || '')
+        .split(',')
+        .map(r => r.trim())
+        .filter(r => r.length > 0);
+
+    if (contentReqs.length === 0) {
+        return { isCorrect: true, feedback: "要点を的確に捉えています。" };
+    }
+
+    let matchCount = 0;
+    contentReqs.forEach(req => {
+        // フレーズ内のキーワードが含まれているか判定
+        if (containsTerm(req)) {
+            matchCount++;
+        } else {
+            // フレーズを形態素風に2文字以上の単語で分解して部分一致をチェック
+            const words = req.split(/[のはがでにをと、。]+/).filter(w => w.length >= 2);
+            if (words.some(w => containsTerm(w))) {
+                matchCount += 0.8;
+            }
+        }
+    });
+
+    const coverRate = matchCount / contentReqs.length;
+    // 要件の40%以上をカバーしていれば正解（表現の揺らぎを許容）
+    if (coverRate >= 0.4) {
+        return { isCorrect: true, feedback: "内容の趣旨が合致しています。" };
+    } else {
+        return {
+            isCorrect: false,
+            feedback: "必須用語は含まれていますが、論述内容の要点が不足しています。"
+        };
+    }
+}
+
+// 判定ディスパッチャー
 function judgeUserAnswer(userInput, questionItem) {
     const qType = questionItem.q_type || 'choice';
 
     if (qType === 'choice') {
-        return userInput === true;
+        return { isCorrect: userInput === true, feedback: '' };
     } else if (qType === 'input') {
         const normUser = normalizeAnswerString(userInput);
         const validAnswers = (questionItem.answer || questionItem.choice1 || '')
             .split(',')
             .map(a => normalizeAnswerString(a));
-        return validAnswers.includes(normUser);
+        const ok = validAnswers.includes(normUser);
+        return { isCorrect: ok, feedback: ok ? '' : '表記または用語が異なります。' };
     } else if (qType === 'desc') {
-        const normUser = normalizeAnswerString(userInput);
-        let rawKeywords = [];
-        if (questionItem.keywords) {
-            rawKeywords = questionItem.keywords.split(',');
-        } else {
-            [questionItem.choice1, questionItem.choice2, questionItem.choice3, questionItem.choice4, questionItem.answer].forEach(val => {
-                if (val && val.trim()) rawKeywords.push(val);
-            });
-        }
-
-        const keywords = rawKeywords
-            .map(k => normalizeAnswerString(k))
-            .filter(k => k.length > 0);
-
-        if (keywords.length === 0) return true;
-        const matchCount = keywords.filter(kw => normUser.includes(kw)).length;
-        const requiredCount = Math.max(1, Math.floor(keywords.length * 0.4));
-        return matchCount >= requiredCount;
+        return judgeDescAnswer(userInput, questionItem);
     }
-    return false;
+    return { isCorrect: false, feedback: '' };
 }
